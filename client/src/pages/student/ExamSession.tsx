@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { useSession, useExam, useExamQuestions, useCreateSubmission } from "@/hooks/use-exams";
+import { useExam, useExamQuestions, useCreateSubmission } from "@/hooks/use-exams";
 import { useSession as useSessionQuery } from "@/hooks/use-sessions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

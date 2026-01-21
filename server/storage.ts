@@ -139,7 +139,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createQuestion(question: CreateQuestionRequest): Promise<Question> {
-    const [newQuestion] = await db.insert(questions).values(question).returning();
+    const [newQuestion] = await db.insert(questions).values({
+      ...question,
+      type: question.type as "multiple_choice" | "short_answer" | "essay"
+    }).returning();
     return newQuestion;
   }
 
