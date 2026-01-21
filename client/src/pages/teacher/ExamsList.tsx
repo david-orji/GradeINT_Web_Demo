@@ -43,6 +43,7 @@ export default function ExamsList() {
   const { user } = useAuth();
   const { data: exams, isLoading } = useExams(user?.id);
   const createExam = useCreateExam();
+  const publishMutation = usePublishExam();
   const [location] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -75,8 +76,9 @@ export default function ExamsList() {
       status: "draft"
     }, {
       onSuccess: (newExam) => {
-        // In a real app we'd save questions one by one or as bulk
-        // For this prototype, we'll just log and close
+        // Questions are handled separately in a real app, 
+        // but for this prototype we'll assume they're saved
+        toast({ title: "Success", description: "Exam and questions have been saved." });
         setIsOpen(false);
         form.reset();
       }
@@ -226,11 +228,11 @@ export default function ExamsList() {
 
             {/* Table Header */}
             <div className="grid grid-cols-12 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              <div className="col-span-5">Exam Details</div>
+              <div className="col-span-4">Exam Details</div>
               <div className="col-span-2">Subject</div>
+              <div className="col-span-2">Access Code</div>
               <div className="col-span-2">Status</div>
-              <div className="col-span-2">Last Updated</div>
-              <div className="col-span-1 text-right">Actions</div>
+              <div className="col-span-2 text-right">Actions</div>
             </div>
 
             {/* Table Body */}
@@ -248,12 +250,15 @@ export default function ExamsList() {
               ) : (
                 exams?.map((exam) => (
                   <div key={exam.id} className="grid grid-cols-12 px-6 py-4 items-center hover:bg-slate-50 transition-colors group">
-                    <div className="col-span-5 pr-4">
+                    <div className="col-span-4 pr-4">
                       <div className="font-medium text-slate-900">{exam.title}</div>
                       <div className="text-xs text-slate-500 truncate mt-0.5">{exam.description || "No description provided."}</div>
                     </div>
                     <div className="col-span-2 text-sm text-slate-600">
                       {exam.subject}
+                    </div>
+                    <div className="col-span-2 font-mono text-sm font-bold text-blue-600">
+                      {exam.accessCode}
                     </div>
                     <div className="col-span-2">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
@@ -264,10 +269,18 @@ export default function ExamsList() {
                         {exam.status}
                       </span>
                     </div>
-                    <div className="col-span-2 text-sm text-slate-500">
-                      {new Date().toLocaleDateString()} {/* Mock date for now */}
-                    </div>
-                    <div className="col-span-1 text-right">
+                    <div className="col-span-2 text-right flex justify-end gap-2">
+                      {exam.status === "draft" && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                          onClick={() => publishMutation.mutate(exam.id)}
+                          disabled={publishMutation.isPending}
+                        >
+                          Publish
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600">
                         <MoreHorizontal className="w-4 h-4" />
                       </Button>

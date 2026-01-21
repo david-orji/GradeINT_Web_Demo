@@ -1,11 +1,17 @@
 import { Sidebar } from "@/components/layout/Sidebar";
-import { useSessions } from "@/hooks/use-sessions";
-import { CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { useExams, useSubmissionsByExam } from "@/hooks/use-exams";
+import { CheckCircle, Clock, AlertCircle, FileText } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
+import { useAuth } from "@/hooks/use-auth";
+import { useState } from "react";
 
 export default function GradingPage() {
-  const { data: sessions, isLoading } = useSessions();
-  const completedSessions = sessions?.filter(s => s.status === "completed") || [];
+  const { user } = useAuth();
+  const { data: exams } = useExams(user?.id);
+  const [selectedExamId, setSelectedExamId] = useState<number | null>(null);
+  const { data: submissions, isLoading } = useSubmissionsByExam(selectedExamId || 0);
+
+  const awaitingGradingCount = submissions?.filter(s => s.status === "submitted").length || 0;
 
   return (
     <div className="flex h-screen bg-slate-50">
@@ -20,7 +26,7 @@ export default function GradingPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <StatCard 
               title="Awaiting Review" 
-              value={completedSessions.length} 
+              value={awaitingGradingCount} 
               icon={Clock} 
               colorClass="bg-amber-100 text-amber-700"
             />
@@ -38,26 +44,63 @@ export default function GradingPage() {
             />
           </div>
 
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="font-semibold text-slate-800">Completed Sessions</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Exam Selection List */}
+            <div className="lg:col-span-1 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 font-semibold text-slate-800">
+                Select Exam
+              </div>
+              <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                {exams?.filter(e => e.status === "published").map(exam => (
+                  <button
+                    key={exam.id}
+                    onClick={() => setSelectedExamId(exam.id)}
+                    className={`w-full text-left px-6 py-4 hover:bg-slate-50 transition-colors ${selectedExamId === exam.id ? "bg-blue-50 border-r-2 border-blue-500" : ""}`}
+                  >
+                    <div className="font-medium text-slate-900">{exam.title}</div>
+                    <div className="text-xs text-slate-500 mt-0.5 font-mono">{exam.accessCode}</div>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="divide-y divide-slate-100">
-              {isLoading ? (
-                <div className="p-8 text-center text-slate-400">Loading sessions...</div>
-              ) : completedSessions.length === 0 ? (
-                <div className="p-12 text-center text-slate-500">No completed sessions awaiting grading.</div>
-              ) : (
-                completedSessions.map(session => (
-                  <div key={session.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer">
-                    <div>
-                      <h4 className="font-medium text-slate-900">Session #{session.accessCode}</h4>
-                      <p className="text-sm text-slate-500">Completed on {new Date(session.endTime || "").toLocaleDateString()}</p>
-                    </div>
-                    <button className="text-sm font-medium text-blue-600 hover:text-blue-700">Open Gradebook</button>
+
+            {/* Submissions List */}
+            <div className="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 font-semibold text-slate-800 flex justify-between">
+                <span>Student Submissions</span>
+                {selectedExamId && submissions && (
+                  <span className="text-xs font-normal text-slate-500">{submissions.length} total</span>
+                )}
+              </div>
+              <div className="divide-y divide-slate-100">
+                {!selectedExamId ? (
+                  <div className="p-20 text-center text-slate-400">
+                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                    <p>Select an exam to view submissions</p>
                   </div>
-                ))
-              )}
+                ) : isLoading ? (
+                  <div className="p-12 text-center text-slate-400">Loading submissions...</div>
+                ) : submissions?.length === 0 ? (
+                  <div className="p-12 text-center text-slate-500">No submissions found for this exam.</div>
+                ) : (
+                  submissions?.map(submission => (
+                    <div key={submission.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                      <div>
+                        <h4 className="font-medium text-slate-900">Student ID: {submission.studentId}</h4>
+                        <p className="text-xs text-slate-500">Submitted on {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString() : "N/A"}</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                          submission.status === "graded" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}>
+                          {submission.status}
+                        </span>
+                        <button className="text-sm font-medium text-blue-600 hover:text-blue-700">Review</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>

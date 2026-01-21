@@ -109,6 +109,19 @@ export function usePublishExam() {
   });
 }
 
+export function useSubmissionsByExam(examId: number) {
+  return useQuery({
+    queryKey: [api.submissions.listByExam.path, examId],
+    queryFn: async () => {
+      const url = buildUrl(api.submissions.listByExam.path, { examId });
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch submissions");
+      return api.submissions.listByExam.responses[200].parse(await res.json());
+    },
+    enabled: !!examId,
+  });
+}
+
 // Submissions
 export function useCreateSubmission() {
   const queryClient = useQueryClient();

@@ -65,6 +65,15 @@ export class DatabaseStorage implements IStorage {
   async createExam(exam: CreateExamRequest): Promise<Exam> {
     const accessCode = this.generateAccessCode();
     const [newExam] = await db.insert(exams).values({ ...exam, accessCode }).returning();
+    
+    // Auto-create a session for the published exam to make it immediately testable
+    if (exam.status === "published") {
+      await db.insert(examSessions).values({
+        examId: newExam.id,
+        accessCode: accessCode,
+        status: "active",
+      });
+    }
     return newExam;
   }
 
@@ -79,6 +88,14 @@ export class DatabaseStorage implements IStorage {
 
   async publishExam(id: number): Promise<Exam> {
     const [updated] = await db.update(exams).set({ status: "published" }).where(eq(exams.id, id)).returning();
+    
+    // Create an active session when an exam is published
+    await db.insert(examSessions).values({
+      examId: updated.id,
+      accessCode: updated.accessCode,
+      status: "active",
+    });
+    
     return updated;
   }
 
