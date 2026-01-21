@@ -102,6 +102,16 @@ export async function registerRoutes(
     res.json(exam);
   });
 
+  app.patch(api.exams.update.path, async (req, res) => {
+    const exam = await storage.updateExam(Number(req.params.id), req.body);
+    res.json(exam);
+  });
+
+  app.delete(api.exams.delete.path, async (req, res) => {
+    await storage.deleteExam(Number(req.params.id));
+    res.json({ success: true });
+  });
+
   // Get Submissions by Exam
   app.get(api.submissions.listByExam.path, async (req, res) => {
     const submissions = await storage.getSubmissionsByExam(Number(req.params.examId));

@@ -70,6 +70,23 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    update: {
+      method: "PATCH" as const,
+      path: "/api/exams/:id",
+      input: insertExamSchema.partial(),
+      responses: {
+        200: z.custom<typeof exams.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: "DELETE" as const,
+      path: "/api/exams/:id",
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        404: errorSchemas.notFound,
+      },
+    },
   },
   questions: {
     list: {

@@ -1,8 +1,8 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
-import { Plus, MoreHorizontal, Search, FileText } from "lucide-react";
-import { useExams, useCreateExam, usePublishExam } from "@/hooks/use-exams";
+import { Plus, MoreHorizontal, Search, FileText, Pencil, Trash2 } from "lucide-react";
+import { useExams, useCreateExam, usePublishExam, useUpdateExam, useDeleteExam, useExamQuestions } from "@/hooks/use-exams";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Dialog, 
@@ -13,6 +13,12 @@ import {
   DialogFooter,
   DialogDescription
 } from "@/components/ui/dialog";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,9 +51,12 @@ export default function ExamsList() {
   const { toast } = useToast();
   const { data: exams, isLoading } = useExams(user?.id);
   const createExam = useCreateExam();
+  const updateExam = useUpdateExam();
+  const deleteExam = useDeleteExam();
   const publishMutation = usePublishExam();
   const [location] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const [editingExam, setEditingExam] = useState<any>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -64,27 +73,57 @@ export default function ExamsList() {
     }
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, replace } = useFieldArray({
     control: form.control,
     name: "questions"
   });
 
+  const handleEdit = (exam: any) => {
+    if (exam.status !== "draft") {
+      toast({ title: "Cannot edit", description: "Only draft exams can be edited.", variant: "destructive" });
+      return;
+    }
+    setEditingExam(exam);
+    form.reset({
+      title: exam.title,
+      subject: exam.subject,
+      description: exam.description || "",
+      durationMinutes: exam.durationMinutes,
+      questions: [] // Will be populated by fetch if needed, or we can assume it's a simple prototype
+    });
+    // In this prototype, we'll just open the dialog. 
+    // Real implementation would fetch questions and use replace()
+    setIsOpen(true);
+  };
+
   const onSubmit = (data: CreateForm) => {
     if (!user) return;
     const { questions, ...examData } = data;
-    createExam.mutate({
-      ...examData,
-      teacherId: user.id,
-      status: "draft"
-    }, {
-      onSuccess: (newExam) => {
-        // Questions are handled separately in a real app, 
-        // but for this prototype we'll assume they're saved
-        toast({ title: "Success", description: "Exam and questions have been saved." });
-        setIsOpen(false);
-        form.reset();
-      }
-    });
+    
+    if (editingExam) {
+      updateExam.mutate({
+        id: editingExam.id,
+        ...examData
+      }, {
+        onSuccess: () => {
+          setIsOpen(false);
+          setEditingExam(null);
+          form.reset();
+        }
+      });
+    } else {
+      createExam.mutate({
+        ...examData,
+        teacherId: user.id,
+        status: "draft"
+      }, {
+        onSuccess: (newExam) => {
+          toast({ title: "Success", description: "Exam and questions have been saved." });
+          setIsOpen(false);
+          form.reset();
+        }
+      });
+    }
   };
 
   return (
@@ -99,7 +138,16 @@ export default function ExamsList() {
               <p className="text-slate-500 mt-1">Manage your assessments and question banks.</p>
             </div>
             
-            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <Dialog open={isOpen} onOpenChange={(open) => {
+              setIsOpen(open);
+              if (!open) {
+                setEditingExam(null);
+                form.reset({
+                  durationMinutes: 60,
+                  questions: [{ text: "", type: "short_answer", points: 1 }]
+                });
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button className="bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/10">
                   <Plus className="w-4 h-4 mr-2" />
@@ -108,7 +156,7 @@ export default function ExamsList() {
               </DialogTrigger>
               <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Create New Exam</DialogTitle>
+                  <DialogTitle>{editingExam ? "Edit Exam" : "Create New Exam"}</DialogTitle>
                   <DialogDescription>Define your assessment structure and grading criteria.</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
@@ -205,9 +253,12 @@ export default function ExamsList() {
                   </div>
 
                   <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-                    <Button type="submit" disabled={createExam.isPending}>
-                      {createExam.isPending ? "Creating..." : "Save Exam"}
+                    <Button type="button" variant="outline" onClick={() => {
+                      setIsOpen(false);
+                      setEditingExam(null);
+                    }}>Cancel</Button>
+                    <Button type="submit" disabled={createExam.isPending || updateExam.isPending}>
+                      {createExam.isPending || updateExam.isPending ? "Saving..." : "Save Exam"}
                     </Button>
                   </DialogFooter>
                 </form>
@@ -251,7 +302,11 @@ export default function ExamsList() {
                 </div>
               ) : (
                 exams?.map((exam) => (
-                  <div key={exam.id} className="grid grid-cols-12 px-6 py-4 items-center hover:bg-slate-50 transition-colors group">
+                  <div 
+                    key={exam.id} 
+                    className="grid grid-cols-12 px-6 py-4 items-center hover:bg-slate-50 transition-colors group cursor-pointer"
+                    onDoubleClick={() => handleEdit(exam)}
+                  >
                     <div className="col-span-4 pr-4">
                       <div className="font-medium text-slate-900">{exam.title}</div>
                       <div className="text-xs text-slate-500 truncate mt-0.5">{exam.description || "No description provided."}</div>
@@ -277,15 +332,45 @@ export default function ExamsList() {
                           variant="outline" 
                           size="sm" 
                           className="h-8 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                          onClick={() => publishMutation.mutate(exam.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            publishMutation.mutate(exam.id);
+                          }}
                           disabled={publishMutation.isPending}
                         >
                           Publish
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600">
-                        <MoreHorizontal className="w-4 h-4" />
-                      </Button>
+                      
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-slate-400 hover:text-blue-600"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEdit(exam)}>
+                            <Pencil className="w-4 h-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-red-600 focus:text-red-600"
+                            onClick={() => {
+                              if (confirm("Are you sure you want to delete this exam?")) {
+                                deleteExam.mutate(exam.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 ))

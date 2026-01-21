@@ -17,6 +17,8 @@ export interface IStorage {
   getExams(teacherId?: number): Promise<Exam[]>;
   getExam(id: number): Promise<Exam | undefined>;
   createExam(exam: CreateExamRequest): Promise<Exam>;
+  updateExam(id: number, updates: Partial<CreateExamRequest>): Promise<Exam>;
+  deleteExam(id: number): Promise<void>;
   publishExam(id: number): Promise<Exam>;
   
   // Questions
@@ -84,6 +86,17 @@ export class DatabaseStorage implements IStorage {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return code;
+  }
+
+  async updateExam(id: number, updates: Partial<CreateExamRequest>): Promise<Exam> {
+    const [updated] = await db.update(exams).set(updates).where(eq(exams.id, id)).returning();
+    if (!updated) throw new Error("Exam not found");
+    return updated;
+  }
+
+  async deleteExam(id: number): Promise<void> {
+    await db.delete(questions).where(eq(questions.examId, id));
+    await db.delete(exams).where(eq(exams.id, id));
   }
 
   async publishExam(id: number): Promise<Exam> {

@@ -55,6 +55,46 @@ export function useCreateExam() {
   });
 }
 
+export function useUpdateExam() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: Partial<CreateExamRequest> & { id: number }) => {
+      const url = buildUrl(api.exams.update.path, { id });
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update exam");
+      return api.exams.update.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.exams.list.path] });
+      toast({ title: "Exam updated", description: "The exam has been updated." });
+    },
+  });
+}
+
+export function useDeleteExam() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const url = buildUrl(api.exams.delete.path, { id });
+      const res = await fetch(url, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete exam");
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.exams.list.path] });
+      toast({ title: "Exam deleted", description: "The exam has been removed." });
+    },
+  });
+}
+
 // Questions
 export function useExamQuestions(examId: number) {
   return useQuery({
