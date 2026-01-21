@@ -2,7 +2,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Plus, MoreHorizontal, Search, FileText } from "lucide-react";
-import { useExams, useCreateExam } from "@/hooks/use-exams";
+import { useExams, useCreateExam, usePublishExam } from "@/hooks/use-exams";
 import { 
   Dialog, 
   DialogContent, 
