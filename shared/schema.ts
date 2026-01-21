@@ -20,6 +20,7 @@ export const exams = pgTable("exams", {
   description: text("description"),
   durationMinutes: integer("duration_minutes").notNull().default(60),
   teacherId: integer("teacher_id").notNull(),
+  accessCode: text("access_code").notNull().unique(),
   status: text("status", { enum: ["draft", "published", "archived"] }).notNull().default("draft"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -53,6 +54,7 @@ export const submissions = pgTable("submissions", {
   id: serial("id").primaryKey(),
   sessionId: integer("session_id").notNull(),
   studentId: integer("student_id").notNull(),
+  examId: integer("exam_id").notNull(),
   status: text("status", { enum: ["in_progress", "submitted", "graded"] }).notNull().default("in_progress"),
   startedAt: timestamp("started_at").defaultNow(),
   submittedAt: timestamp("submitted_at"),
@@ -66,7 +68,7 @@ export const submissions = pgTable("submissions", {
 // === SCHEMAS ===
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
-export const insertExamSchema = createInsertSchema(exams).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertExamSchema = createInsertSchema(exams).omit({ id: true, createdAt: true, updatedAt: true, accessCode: true });
 export const insertQuestionSchema = createInsertSchema(questions).omit({ id: true });
 export const insertSessionSchema = createInsertSchema(examSessions).omit({ id: true, startTime: true, endTime: true });
 export const insertSubmissionSchema = createInsertSchema(submissions).omit({ id: true, startedAt: true, submittedAt: true, grades: true, totalScore: true });
@@ -83,6 +85,8 @@ export type CreateExamRequest = z.infer<typeof insertExamSchema>;
 export type CreateQuestionRequest = z.infer<typeof insertQuestionSchema>;
 export type CreateSessionRequest = z.infer<typeof insertSessionSchema>;
 export type CreateSubmissionRequest = z.infer<typeof insertSubmissionSchema>;
+
+export type UpdateExamRequest = { status: "published" | "archived" };
 
 export type UpdateSubmissionRequest = {
   status?: "submitted" | "graded";

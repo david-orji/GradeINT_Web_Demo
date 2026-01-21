@@ -17,6 +17,7 @@ export interface IStorage {
   getExams(teacherId?: number): Promise<Exam[]>;
   getExam(id: number): Promise<Exam | undefined>;
   createExam(exam: CreateExamRequest): Promise<Exam>;
+  publishExam(id: number): Promise<Exam>;
   
   // Questions
   getQuestions(examId: number): Promise<Question[]>;
@@ -29,6 +30,7 @@ export interface IStorage {
   
   // Submissions
   getSubmissions(sessionId: number): Promise<Submission[]>;
+  getSubmissionsByExam(examId: number): Promise<Submission[]>;
   createSubmission(submission: CreateSubmissionRequest): Promise<Submission>;
   updateSubmission(id: number, updates: UpdateSubmissionRequest): Promise<Submission>;
 }
@@ -61,8 +63,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createExam(exam: CreateExamRequest): Promise<Exam> {
-    const [newExam] = await db.insert(exams).values(exam).returning();
+    const accessCode = this.generateAccessCode();
+    const [newExam] = await db.insert(exams).values({ ...exam, accessCode }).returning();
     return newExam;
+  }
+
+  private generateAccessCode(): string {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let code = "";
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
+
+  async publishExam(id: number): Promise<Exam> {
+    const [updated] = await db.update(exams).set({ status: "published" }).where(eq(exams.id, id)).returning();
+    return updated;
   }
 
   async getQuestions(examId: number): Promise<Question[]> {
@@ -103,6 +120,10 @@ export class DatabaseStorage implements IStorage {
   async updateSubmission(id: number, updates: UpdateSubmissionRequest): Promise<Submission> {
     const [updated] = await db.update(submissions).set(updates).where(eq(submissions.id, id)).returning();
     return updated;
+  }
+
+  async getSubmissionsByExam(examId: number): Promise<Submission[]> {
+    return await db.select().from(submissions).where(eq(submissions.examId, examId));
   }
 }
 

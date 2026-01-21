@@ -91,6 +91,24 @@ export function useCreateQuestion() {
   });
 }
 
+export function usePublishExam() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (examId: number) => {
+      const url = buildUrl(api.exams.publish.path, { id: examId });
+      const res = await fetch(url, { method: "PATCH" });
+      if (!res.ok) throw new Error("Failed to publish exam");
+      return api.exams.publish.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.exams.list.path] });
+      toast({ title: "Exam Published", description: "Exam is now live for students." });
+    },
+  });
+}
+
 // Submissions
 export function useCreateSubmission() {
   const queryClient = useQueryClient();

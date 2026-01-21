@@ -96,6 +96,18 @@ export async function registerRoutes(
     res.json(submission);
   });
 
+  // Publish Exam
+  app.patch(api.exams.publish.path, async (req, res) => {
+    const exam = await storage.publishExam(Number(req.params.id));
+    res.json(exam);
+  });
+
+  // Get Submissions by Exam
+  app.get(api.submissions.listByExam.path, async (req, res) => {
+    const submissions = await storage.getSubmissionsByExam(Number(req.params.examId));
+    res.json(submissions);
+  });
+
   // === SEED DATA ===
   await seedDatabase();
 

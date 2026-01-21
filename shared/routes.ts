@@ -62,6 +62,14 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    publish: {
+      method: "PATCH" as const,
+      path: "/api/exams/:id/publish",
+      responses: {
+        200: z.custom<typeof exams.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
   },
   questions: {
     list: {
@@ -112,6 +120,13 @@ export const api = {
     list: {
       method: "GET" as const,
       path: "/api/sessions/:sessionId/submissions",
+      responses: {
+        200: z.array(z.custom<typeof submissions.$inferSelect>()),
+      },
+    },
+    listByExam: {
+      method: "GET" as const,
+      path: "/api/exams/:examId/submissions",
       responses: {
         200: z.array(z.custom<typeof submissions.$inferSelect>()),
       },
