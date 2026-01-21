@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Plus, MoreHorizontal, Search, FileText } from "lucide-react";
 import { useExams, useCreateExam, usePublishExam } from "@/hooks/use-exams";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Dialog, 
   DialogContent, 
@@ -41,6 +42,7 @@ type CreateForm = z.infer<typeof createSchema>;
 
 export default function ExamsList() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { data: exams, isLoading } = useExams(user?.id);
   const createExam = useCreateExam();
   const publishMutation = usePublishExam();
