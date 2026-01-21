@@ -140,8 +140,9 @@ export default function ExamsList() {
       createExam.mutate({
         ...examData,
         teacherId: user.id,
-        status: "draft"
-      }, {
+        status: "draft",
+        questions: questionsData // Ensure questions are passed to create as well
+      } as any, {
         onSuccess: (newExam) => {
           toast({ title: "Success", description: "Exam and questions have been saved." });
           setIsOpen(false);

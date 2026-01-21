@@ -65,11 +65,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createExam(exam: CreateExamRequest): Promise<Exam> {
+    const { questions: questionsData, ...examFields } = exam as any;
     const accessCode = this.generateAccessCode();
-    const [newExam] = await db.insert(exams).values({ ...exam, accessCode }).returning();
+    const [newExam] = await db.insert(exams).values({ ...examFields, accessCode }).returning();
     
+    // If questions are provided, add them
+    if (questionsData && Array.isArray(questionsData)) {
+      for (const [index, q] of questionsData.entries()) {
+        await db.insert(questions).values({
+          examId: newExam.id,
+          text: q.text,
+          type: q.type as "multiple_choice" | "short_answer" | "essay",
+          points: q.points,
+          options: q.options,
+          rubric: q.rubric,
+          order: index + 1
+        });
+      }
+    }
+
     // Auto-create a session for the published exam to make it immediately testable
-    if (exam.status === "published") {
+    if (examFields.status === "published") {
       await db.insert(examSessions).values({
         examId: newExam.id,
         accessCode: accessCode,
