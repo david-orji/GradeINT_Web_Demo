@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
-import { Plus, MoreHorizontal, Search, FileText, Pencil, Trash2 } from "lucide-react";
+import { Plus, MoreHorizontal, Search, FileText, Pencil, Trash2, Copy, Check } from "lucide-react";
 import { useExams, useCreateExam, usePublishExam, useUpdateExam, useDeleteExam, useExamQuestions } from "@/hooks/use-exams";
 import { api, buildUrl } from "@shared/routes";
 import { useToast } from "@/hooks/use-toast";
@@ -50,6 +50,7 @@ type CreateForm = z.infer<typeof createSchema>;
 export default function ExamsList() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const { data: exams, isLoading } = useExams(user?.id);
   const createExam = useCreateExam();
   const updateExam = useUpdateExam();
@@ -118,6 +119,13 @@ export default function ExamsList() {
     }
     
     setIsOpen(true);
+  };
+
+  const copyToClipboard = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    toast({ title: "Copied", description: "Access code copied to clipboard." });
+    setTimeout(() => setCopiedCode(null), 2000);
   };
 
   const onSubmit = (data: CreateForm) => {
@@ -340,8 +348,23 @@ export default function ExamsList() {
                     <div className="col-span-2 text-sm text-slate-600">
                       {exam.subject}
                     </div>
-                    <div className="col-span-2 font-mono text-sm font-bold text-blue-600">
-                      {exam.accessCode}
+                    <div className="col-span-2 flex items-center gap-2">
+                      <span className="font-mono text-sm font-bold text-blue-600">{exam.accessCode}</span>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6 text-slate-400 hover:text-blue-600"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyToClipboard(exam.accessCode);
+                        }}
+                      >
+                        {copiedCode === exam.accessCode ? (
+                          <Check className="w-3 h-3 text-green-600" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </Button>
                     </div>
                     <div className="col-span-2">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
