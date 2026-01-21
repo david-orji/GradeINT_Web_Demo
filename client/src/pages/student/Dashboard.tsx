@@ -54,9 +54,9 @@ export default function StudentDashboard() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Input 
-                  placeholder="Enter 6-character code" 
+                  placeholder="Enter 8-character code" 
                   className="text-center text-2xl tracking-widest uppercase font-mono h-14"
-                  maxLength={6}
+                  maxLength={8}
                   value={accessCode}
                   onChange={(e) => {
                     setAccessCode(e.target.value.toUpperCase());
@@ -67,7 +67,7 @@ export default function StudentDashboard() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-lg" onClick={handleJoin} disabled={accessCode.length < 3}>
+              <Button className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-lg" onClick={handleJoin} disabled={accessCode.length < 8}>
                 Start Exam
               </Button>
             </CardFooter>
