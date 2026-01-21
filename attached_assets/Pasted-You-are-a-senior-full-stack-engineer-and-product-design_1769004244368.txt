@@ -1,0 +1,56 @@
+You are a senior full stack engineer and product designer. Build a design-first, clickable web prototype for “GradeINT” (Grade Intelligence), an offline-first exam delivery and cloud grading system that assesses understanding and reasoning, not memorization. This prototype is for demonstration and validation, not production yet, but it must reflect the real product workflows.
+
+Primary goal
+Create a polished, modern, Microsoft 365 caliber UI and UX that communicates trust, control, integrity, and calm intelligence. The app should feel like serious education infrastructure, not a startup landing page.
+
+Constraints
+- Design-first: prioritize UI/UX, flows, and realism of screens.
+- Use mocked data and local storage where needed.
+- No hard dependency on paid APIs.
+- Must run in Replit with one command.
+- Include a simple fake “grading engine” that produces deterministic results and explanations, so the flows are demonstrable without external AI.
+
+Recommended stack
+- Next.js (App Router) + TypeScript
+- Tailwind CSS
+- Component library: shadcn/ui (or lightweight equivalents)
+- State: React state plus localStorage
+- Charts: Recharts (optional) for analytics
+- Auth: simulated auth (mock users) for the prototype
+
+Product concept summary
+GradeINT is an assessment system for formal education that:
+- Runs exams offline on a school’s local server on exam day
+- Seals responses at exam end to prevent tampering
+- Uploads to cloud when internet is available
+- Grades in the cloud only (for the real system), but for this prototype simulate grading locally
+- Gives teachers full control: review, override, and audit grading outcomes
+- Uses explainable grading: show criteria, reasoning, and evidence from the student response
+- Schools own their data. No training on student responses.
+
+User roles in prototype
+1) Admin (Institution)
+- Sets up departments, courses, teachers, sessions
+- Sees exam activity logs and integrity alerts
+2) Teacher (Examiner)
+- Creates exams, rubrics, schedules
+- Starts an exam session, monitors submissions
+- Reviews results, overrides marks, exports
+3) Student (Candidate)
+- Takes exam in a clean, focused interface
+4) Invigilator (optional role)
+- Starts session, monitors, handles incident report
+
+App IA (pages and flows)
+A) Authentication (mock)
+- /login: choose role and user from a dropdown
+- Store session in localStorage
+
+B) Teacher Dashboard
+- /teacher
+  - Quick actions: Create Exam, View Sessions, Review Results
+  - Cards: Active sessions, Pending grading, Integrity alerts (mock)
+- /teacher/exams
+  - Exam list, status, course, session, last edited
+  - Create new exam button
+- /teacher/exams/new
