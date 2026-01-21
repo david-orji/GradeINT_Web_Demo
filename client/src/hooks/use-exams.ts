@@ -163,7 +163,6 @@ export function useSubmissionsByExam(examId: number) {
   });
 }
 
-// Submissions
 export function useCreateSubmission() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -179,6 +178,7 @@ export function useCreateSubmission() {
       return api.submissions.create.responses[201].parse(await res.json());
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.submissions.listByExam.path] });
       toast({ title: "Exam Submitted", description: "Your responses have been sealed and uploaded." });
     },
   });

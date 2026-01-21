@@ -19,9 +19,9 @@ export default function ExamSession() {
   const [, setLocation] = useLocation();
   
   const { user } = useAuth();
-  const { data: session } = useSessionQuery(sessionId);
-  const { data: exam } = useExam(session?.examId || 0);
-  const { data: questions } = useExamQuestions(session?.examId || 0);
+  const { data: session, isLoading: sessionLoading } = useSessionQuery(sessionId);
+  const { data: exam, isLoading: examLoading } = useExam(session?.examId || 0);
+  const { data: questions, isLoading: questionsLoading } = useExamQuestions(session?.examId || 0);
   const submitMutation = useCreateSubmission();
   const { toast } = useToast();
 
@@ -58,6 +58,7 @@ export default function ExamSession() {
     
     submitMutation.mutate({
       sessionId,
+      examId: session.examId,
       studentId: user.id,
       responses: responses,
       status: "submitted"
@@ -69,7 +70,35 @@ export default function ExamSession() {
     });
   };
 
-  if (!exam || !questions) return <div className="p-8 text-center">Loading exam environment...</div>;
+  if (sessionLoading || examLoading || questionsLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-slate-500 font-medium">Securing your assessment environment...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!exam || !questions || questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Card className="max-w-md w-full border-red-100 shadow-xl shadow-red-900/5">
+          <CardContent className="pt-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900">Exam Unavailable</h3>
+            <p className="text-slate-500 text-sm">We couldn't find any questions for this exam. Please contact your invigilator.</p>
+            <Button onClick={() => setLocation("/student/dashboard")} variant="outline" className="w-full">
+              Return to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
