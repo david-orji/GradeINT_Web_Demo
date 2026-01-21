@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl, type CreateExamRequest, type CreateQuestionRequest } from "@shared/routes";
+import { api, buildUrl } from "@shared/routes";
+import type { CreateExamRequest, CreateQuestionRequest } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 export function useExams(teacherId?: number) {

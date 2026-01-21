@@ -89,8 +89,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateExam(id: number, updates: Partial<CreateExamRequest>): Promise<Exam> {
-    const [updated] = await db.update(exams).set(updates).where(eq(exams.id, id)).returning();
+    const { questions: questionsData, ...examFields } = updates as any;
+    
+    const [updated] = await db.update(exams)
+      .set(examFields)
+      .where(eq(exams.id, id))
+      .returning();
+      
     if (!updated) throw new Error("Exam not found");
+
+    if (questionsData && Array.isArray(questionsData)) {
+      await db.delete(questions).where(eq(questions.examId, id));
+      for (const [index, q] of questionsData.entries()) {
+        await db.insert(questions).values({
+          examId: id,
+          text: q.text,
+          type: q.type as "multiple_choice" | "short_answer" | "essay",
+          points: q.points,
+          options: q.options,
+          rubric: q.rubric,
+          order: index + 1
+        });
+      }
+    }
+
     return updated;
   }
 

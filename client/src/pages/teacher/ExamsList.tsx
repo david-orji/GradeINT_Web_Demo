@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Plus, MoreHorizontal, Search, FileText, Pencil, Trash2 } from "lucide-react";
 import { useExams, useCreateExam, usePublishExam, useUpdateExam, useDeleteExam, useExamQuestions } from "@/hooks/use-exams";
+import { api, buildUrl } from "@shared/routes";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Dialog, 
@@ -78,33 +79,57 @@ export default function ExamsList() {
     name: "questions"
   });
 
-  const handleEdit = (exam: any) => {
+  const handleEdit = async (exam: any) => {
     if (exam.status !== "draft") {
       toast({ title: "Cannot edit", description: "Only draft exams can be edited.", variant: "destructive" });
       return;
     }
     setEditingExam(exam);
-    form.reset({
-      title: exam.title,
-      subject: exam.subject,
-      description: exam.description || "",
-      durationMinutes: exam.durationMinutes,
-      questions: [] // Will be populated by fetch if needed, or we can assume it's a simple prototype
-    });
-    // In this prototype, we'll just open the dialog. 
-    // Real implementation would fetch questions and use replace()
+    
+    // Fetch questions for this exam
+    try {
+      const url = buildUrl(api.questions.list.path, { examId: exam.id });
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch questions");
+      const questions = await res.json();
+      
+      form.reset({
+        title: exam.title,
+        subject: exam.subject,
+        description: exam.description || "",
+        durationMinutes: exam.durationMinutes,
+        questions: questions.length > 0 ? questions.map((q: any) => ({
+          text: q.text,
+          type: q.type,
+          points: q.points,
+          options: q.options || [],
+          rubric: q.rubric || ""
+        })) : [{ text: "", type: "short_answer", points: 1 }]
+      });
+    } catch (error) {
+      console.error("Error fetching questions:", error);
+      form.reset({
+        title: exam.title,
+        subject: exam.subject,
+        description: exam.description || "",
+        durationMinutes: exam.durationMinutes,
+        questions: [{ text: "", type: "short_answer", points: 1 }]
+      });
+    }
+    
     setIsOpen(true);
   };
 
   const onSubmit = (data: CreateForm) => {
     if (!user) return;
-    const { questions, ...examData } = data;
+    const { questions: questionsData, ...examData } = data;
     
     if (editingExam) {
       updateExam.mutate({
         id: editingExam.id,
-        ...examData
-      }, {
+        ...examData,
+        questions: questionsData
+      } as any, {
         onSuccess: () => {
           setIsOpen(false);
           setEditingExam(null);
