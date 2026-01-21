@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import Login from "@/pages/Login";
 import TeacherDashboard from "@/pages/teacher/Dashboard";
 import ExamsList from "@/pages/teacher/ExamsList";
+import Grading from "@/pages/teacher/Grading";
 import StudentDashboard from "@/pages/student/Dashboard";
 import ExamSession from "@/pages/student/ExamSession";
 import NotFound from "@/pages/not-found";
@@ -49,6 +50,9 @@ function Router() {
       </Route>
       <Route path="/teacher/exams">
         <ProtectedRoute component={ExamsList} allowedRoles={["teacher", "admin"]} />
+      </Route>
+      <Route path="/teacher/grading">
+        <ProtectedRoute component={Grading} allowedRoles={["teacher", "admin"]} />
       </Route>
 
       {/* Student Routes */}

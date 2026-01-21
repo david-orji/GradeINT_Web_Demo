@@ -4,9 +4,11 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Users, FileText, CheckCircle, Clock } from "lucide-react";
 import { useExams } from "@/hooks/use-exams";
 import { useSessions } from "@/hooks/use-sessions";
+import { useLocation } from "wouter";
 
 export default function TeacherDashboard() {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const { data: exams } = useExams(user?.id);
   const { data: sessions } = useSessions();
 
@@ -88,7 +90,10 @@ export default function TeacherDashboard() {
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
               <h3 className="font-semibold text-slate-800 mb-4">Quick Actions</h3>
               <div className="grid grid-cols-2 gap-4">
-                <button className="flex flex-col items-center justify-center p-4 border border-dashed border-slate-300 rounded-lg hover:bg-slate-50 hover:border-blue-300 hover:text-blue-600 transition-all group">
+                <button 
+                  onClick={() => setLocation("/teacher/exams?create=true")}
+                  className="flex flex-col items-center justify-center p-4 border border-dashed border-slate-300 rounded-lg hover:bg-slate-50 hover:border-blue-300 hover:text-blue-600 transition-all group"
+                >
                   <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:bg-blue-100">
                     <FileText className="w-5 h-5" />
                   </div>

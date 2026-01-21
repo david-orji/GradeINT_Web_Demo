@@ -15,17 +15,26 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useState, useEffect } from "react";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertExamSchema } from "@shared/schema";
 import { z } from "zod";
+import { useLocation } from "wouter";
 
-const createSchema = insertExamSchema.pick({ 
-  title: true, 
-  subject: true, 
-  description: true, 
-  durationMinutes: true 
+const createSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  subject: z.string().min(1, "Subject is required"),
+  description: z.string().optional(),
+  durationMinutes: z.number().min(1),
+  questions: z.array(z.object({
+    text: z.string().min(1, "Question text is required"),
+    type: z.enum(["multiple_choice", "short_answer", "essay"]),
+    points: z.number().min(1),
+    options: z.array(z.string()).optional(),
+    correctAnswer: z.string().optional(),
+    rubric: z.string().optional(),
+  })).min(1, "At least one question is required")
 });
 
 type CreateForm = z.infer<typeof createSchema>;
@@ -34,23 +43,40 @@ export default function ExamsList() {
   const { user } = useAuth();
   const { data: exams, isLoading } = useExams(user?.id);
   const createExam = useCreateExam();
+  const [location] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("create") === "true") {
+      setIsOpen(true);
+    }
+  }, [location]);
 
   const form = useForm<CreateForm>({
     resolver: zodResolver(createSchema),
     defaultValues: {
       durationMinutes: 60,
+      questions: [{ text: "", type: "short_answer", points: 1 }]
     }
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "questions"
   });
 
   const onSubmit = (data: CreateForm) => {
     if (!user) return;
+    const { questions, ...examData } = data;
     createExam.mutate({
-      ...data,
+      ...examData,
       teacherId: user.id,
       status: "draft"
     }, {
-      onSuccess: () => {
+      onSuccess: (newExam) => {
+        // In a real app we'd save questions one by one or as bulk
+        // For this prototype, we'll just log and close
         setIsOpen(false);
         form.reset();
       }
@@ -76,38 +102,108 @@ export default function ExamsList() {
                   Create New Exam
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
+              <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create New Exam</DialogTitle>
-                  <DialogDescription>Setup the basic details. You can add questions later.</DialogDescription>
+                  <DialogDescription>Define your assessment structure and grading criteria.</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Exam Title</Label>
-                    <Input id="title" placeholder="e.g. Midterm Physics 101" {...form.register("title")} />
-                    {form.formState.errors.title && <span className="text-xs text-red-500">{form.formState.errors.title.message}</span>}
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="title">Exam Title</Label>
+                      <Input id="title" {...form.register("title")} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="subject">Subject</Label>
+                      <Input id="subject" {...form.register("subject")} />
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="subject">Subject</Label>
-                      <Input id="subject" placeholder="e.g. Physics" {...form.register("subject")} />
-                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="duration">Duration (mins)</Label>
                       <Input id="duration" type="number" {...form.register("durationMinutes", { valueAsNumber: true })} />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Instructions / Description</Label>
-                    <Textarea id="description" placeholder="Exam rules and guidelines..." {...form.register("description")} />
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-base font-semibold">Questions</Label>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => append({ text: "", type: "short_answer", points: 1 })}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Question
+                      </Button>
+                    </div>
+
+                    <div className="space-y-4">
+                      {fields.map((field, index) => (
+                        <div key={field.id} className="p-4 border border-slate-200 rounded-lg space-y-4 relative bg-slate-50/50">
+                          <button 
+                            type="button"
+                            onClick={() => remove(index)}
+                            className="absolute top-4 right-4 text-slate-400 hover:text-red-500"
+                          >
+                            <Plus className="w-4 h-4 rotate-45" />
+                          </button>
+
+                          <div className="space-y-2">
+                            <Label>Question {index + 1}</Label>
+                            <Input {...form.register(`questions.${index}.text` as const)} placeholder="Enter question text..." />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Type</Label>
+                              <select 
+                                {...form.register(`questions.${index}.type` as const)}
+                                className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                              >
+                                <option value="short_answer">Short Answer</option>
+                                <option value="multiple_choice">Multiple Choice</option>
+                                <option value="essay">Essay</option>
+                              </select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Points</Label>
+                              <Input type="number" {...form.register(`questions.${index}.points` as const, { valueAsNumber: true })} />
+                            </div>
+                          </div>
+
+                          {form.watch(`questions.${index}.type`) === "multiple_choice" && (
+                            <div className="space-y-2">
+                              <Label>Options (comma separated)</Label>
+                              <Input 
+                                placeholder="Option A, Option B, Option C"
+                                onChange={(e) => {
+                                  const options = e.target.value.split(",").map(s => s.trim());
+                                  form.setValue(`questions.${index}.options`, options);
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          <div className="space-y-2">
+                            <Label>Grading Rubric / Key</Label>
+                            <Textarea 
+                              {...form.register(`questions.${index}.rubric` as const)}
+                              placeholder="Describe ideal answer or criteria for AI grading..."
+                              className="h-20"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
                     <Button type="submit" disabled={createExam.isPending}>
-                      {createExam.isPending ? "Creating..." : "Create Draft"}
+                      {createExam.isPending ? "Creating..." : "Save Exam"}
                     </Button>
                   </DialogFooter>
                 </form>
