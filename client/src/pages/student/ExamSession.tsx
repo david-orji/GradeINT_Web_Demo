@@ -21,12 +21,19 @@ export default function ExamSession() {
   const { user } = useAuth();
   const { data: session, isLoading: sessionLoading } = useSessionQuery(sessionId);
   const { data: exam, isLoading: examLoading } = useExam(session?.examId || 0);
-  const { data: questions, isLoading: questionsLoading } = useExamQuestions(session?.examId || 0);
+  const { data: questions, isLoading: questionsLoading, refetch: refetchQuestions } = useExamQuestions(session?.examId || 0);
   const submitMutation = useCreateSubmission();
   const { toast } = useToast();
 
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+  // Re-fetch questions when session is loaded to ensure we have them
+  useEffect(() => {
+    if (session?.examId) {
+      refetchQuestions();
+    }
+  }, [session?.examId, refetchQuestions]);
 
   // Timer logic
   useEffect(() => {
@@ -56,16 +63,25 @@ export default function ExamSession() {
   const handleSubmit = () => {
     if (!user || !session) return;
     
+    // Convert keys to string numbers for consistency
+    const finalResponses: Record<string, string> = {};
+    Object.entries(responses).forEach(([key, value]) => {
+      finalResponses[key] = value;
+    });
+
     submitMutation.mutate({
       sessionId,
       examId: session.examId,
       studentId: user.id,
-      responses: responses,
+      responses: finalResponses,
       status: "submitted"
     }, {
       onSuccess: () => {
         toast({ title: "Submitted Successfully", description: "Your exam has been recorded." });
         setLocation("/student/dashboard");
+      },
+      onError: (error: any) => {
+        toast({ title: "Submission Failed", description: error.message, variant: "destructive" });
       }
     });
   };
