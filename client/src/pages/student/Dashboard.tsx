@@ -29,9 +29,9 @@ export default function StudentDashboard() {
       <nav className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
-            <span className="text-white font-bold text-lg">A</span>
+            <span className="text-white font-bold text-lg">G</span>
           </div>
-          <span className="font-display font-bold text-slate-900 text-lg">AssessPro Student</span>
+          <span className="font-display font-bold text-slate-900 text-lg">GradeINT Student</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-slate-600">{user?.name}</span>

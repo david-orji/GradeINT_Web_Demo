@@ -37,7 +37,7 @@ export default function Login() {
         <div className="mx-auto w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mb-4 shadow-lg shadow-blue-600/20">
           <ShieldCheck className="w-7 h-7 text-white" />
         </div>
-        <h1 className="text-3xl font-display font-bold text-slate-900">AssessPro</h1>
+        <h1 className="text-3xl font-display font-bold text-slate-900">GradeINT</h1>
         <p className="text-slate-500 mt-2">Enterprise Examination Platform</p>
       </div>
 
@@ -82,7 +82,7 @@ export default function Login() {
       </Card>
       
       <p className="mt-8 text-xs text-slate-400 text-center max-w-xs">
-        &copy; 2024 AssessPro Inc. secure examination environment.
+        &copy; 2024 GradeINT Inc. secure examination environment.
       </p>
     </div>
   );

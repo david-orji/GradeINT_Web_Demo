@@ -1,8 +1,8 @@
-# AssessPro - Enterprise Examination Platform
+# GradeINT - Enterprise Examination Platform
 
 ## Overview
 
-AssessPro (originally GradeINT) is a design-first, clickable web prototype for an offline-first exam delivery and cloud grading system. The application provides a polished, Microsoft 365-caliber UI for formal education assessment that:
+GradeINT is a design-first, clickable web prototype for an offline-first exam delivery and cloud grading system. The application provides a polished, Microsoft 365-caliber UI for formal education assessment that:
 
 - Delivers exams with offline capability
 - Seals responses at exam end to prevent tampering

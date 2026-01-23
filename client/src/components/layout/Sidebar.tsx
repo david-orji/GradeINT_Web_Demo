@@ -37,9 +37,9 @@ export function Sidebar({ className }: SidebarProps) {
       <div className="p-6 border-b border-slate-800">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
-            <span className="text-white font-bold text-lg">A</span>
+            <span className="text-white font-bold text-lg">G</span>
           </div>
-          <span className="font-display tracking-tight">AssessPro</span>
+          <span className="font-display tracking-tight">GradeINT</span>
         </h1>
         <p className="mt-2 text-xs text-slate-400 uppercase tracking-wider font-medium">
           {user?.role === "admin" ? "Administration" : "Educator Portal"}
