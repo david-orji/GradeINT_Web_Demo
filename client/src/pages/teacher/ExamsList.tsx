@@ -103,7 +103,7 @@ export default function ExamsList() {
           text: q.text,
           type: q.type,
           points: q.points,
-          options: q.options || [],
+          options: Array.isArray(q.options) ? q.options : [],
           rubric: q.rubric || ""
         })) : [{ text: "", type: "short_answer", points: 1 }]
       });

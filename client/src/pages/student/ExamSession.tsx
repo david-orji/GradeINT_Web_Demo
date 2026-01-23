@@ -31,6 +31,7 @@ export default function ExamSession() {
   // Re-fetch questions when session is loaded to ensure we have them
   useEffect(() => {
     if (session?.examId) {
+      console.log("Session loaded, refetching questions for examId:", session.examId);
       refetchQuestions();
     }
   }, [session?.examId, refetchQuestions]);

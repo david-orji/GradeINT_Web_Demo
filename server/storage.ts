@@ -71,14 +71,15 @@ export class DatabaseStorage implements IStorage {
     
     // If questions are provided, add them
     if (questionsData && Array.isArray(questionsData)) {
+      console.log(`Adding ${questionsData.length} questions to exam ${newExam.id}`);
       for (const [index, q] of questionsData.entries()) {
         await db.insert(questions).values({
           examId: newExam.id,
           text: q.text,
           type: q.type as "multiple_choice" | "short_answer" | "essay",
-          points: q.points,
-          options: q.options,
-          rubric: q.rubric,
+          points: q.points || 1,
+          options: q.options || [],
+          rubric: q.rubric || "",
           order: index + 1
         });
       }
@@ -115,15 +116,16 @@ export class DatabaseStorage implements IStorage {
     if (!updated) throw new Error("Exam not found");
 
     if (questionsData && Array.isArray(questionsData)) {
+      console.log(`Updating ${questionsData.length} questions for exam ${id}`);
       await db.delete(questions).where(eq(questions.examId, id));
       for (const [index, q] of questionsData.entries()) {
         await db.insert(questions).values({
           examId: id,
           text: q.text,
           type: q.type as "multiple_choice" | "short_answer" | "essay",
-          points: q.points,
-          options: q.options,
-          rubric: q.rubric,
+          points: q.points || 1,
+          options: q.options || [],
+          rubric: q.rubric || "",
           order: index + 1
         });
       }
@@ -193,6 +195,7 @@ export class DatabaseStorage implements IStorage {
       ...updates,
       submittedAt: updates.status === "submitted" ? new Date() : undefined
     }).where(eq(submissions.id, id)).returning();
+    if (!updated) throw new Error("Submission not found");
     return updated;
   }
 
