@@ -58,6 +58,8 @@ export default function GradingPage() {
 
   const viewingSubmission = submissions?.find(s => s.id === viewingSubmissionId);
 
+  const awaitingGradingCount = submissions?.filter(s => s.status === "submitted").length || 0;
+
   const totalPossiblePoints = useMemo(() => {
     return questions?.reduce((acc: number, q: any) => acc + (q.points || 0), 0) || 0;
   }, [questions]);
