@@ -30,6 +30,12 @@ export default function StudentDashboard() {
       return;
     }
 
+    const exam = exams?.find(e => e.id === session.examId);
+    if (exam?.status === "closed") {
+      setError("This examination has been closed and is no longer accepting submissions.");
+      return;
+    }
+
     // Check if already submitted
     const alreadySubmitted = submissions?.some(s => s.examId === session.examId);
     if (alreadySubmitted) {

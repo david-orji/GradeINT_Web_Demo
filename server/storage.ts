@@ -108,6 +108,13 @@ export class DatabaseStorage implements IStorage {
   async updateExam(id: number, updates: Partial<CreateExamRequest>): Promise<Exam> {
     const { questions: questionsData, ...examFields } = updates as any;
     
+    // If we're closing the exam, also close associated active sessions
+    if (examFields.status === "closed") {
+      await db.update(examSessions)
+        .set({ status: "inactive" })
+        .where(eq(examSessions.examId, id));
+    }
+
     const [updated] = await db.update(exams)
       .set(examFields)
       .where(eq(exams.id, id))

@@ -21,7 +21,7 @@ export const exams = pgTable("exams", {
   durationMinutes: integer("duration_minutes").notNull().default(60),
   teacherId: integer("teacher_id").notNull(),
   accessCode: text("access_code").notNull().unique(),
-  status: text("status", { enum: ["draft", "published", "archived"] }).notNull().default("draft"),
+  status: text("status", { enum: ["draft", "published", "closed", "archived"] }).notNull().default("draft"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -45,7 +45,7 @@ export const examSessions = pgTable("exam_sessions", {
   id: serial("id").primaryKey(),
   examId: integer("exam_id").notNull(),
   accessCode: text("access_code").notNull(),
-  status: text("status", { enum: ["active", "completed", "locked"] }).notNull().default("active"),
+  status: text("status", { enum: ["active", "completed", "locked", "inactive"] }).notNull().default("active"),
   startTime: timestamp("start_time").defaultNow(),
   endTime: timestamp("end_time"),
 });

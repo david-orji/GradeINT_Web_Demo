@@ -370,7 +370,8 @@ export default function ExamsList() {
                     <div className="col-span-2">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
                         exam.status === "published" ? "bg-green-50 text-green-700 border-green-200" :
-                        exam.status === "draft" ? "bg-slate-100 text-slate-600 border-slate-200" :
+                        exam.status === "closed" ? "bg-slate-100 text-slate-400 border-slate-200" :
+                        exam.status === "draft" ? "bg-blue-50 text-blue-600 border-blue-100" :
                         "bg-amber-50 text-amber-700 border-amber-200"
                       }`}>
                         {exam.status}
@@ -389,6 +390,23 @@ export default function ExamsList() {
                           disabled={publishMutation.isPending}
                         >
                           Publish
+                        </Button>
+                      )}
+
+                      {exam.status === "published" && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 text-xs bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm("Close this exam? No more submissions will be accepted.")) {
+                              updateExam.mutate({ id: exam.id, status: "closed" } as any);
+                            }
+                          }}
+                          disabled={updateExam.isPending}
+                        >
+                          Close Exam
                         </Button>
                       )}
                       
