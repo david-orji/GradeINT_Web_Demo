@@ -265,8 +265,9 @@ export default function ExamsList() {
                               <Label>Options (comma separated)</Label>
                               <Input 
                                 placeholder="Option A, Option B, Option C"
+                                defaultValue={form.getValues(`questions.${index}.options`)?.join(", ")}
                                 onChange={(e) => {
-                                  const options = e.target.value.split(",").map(s => s.trim());
+                                  const options = e.target.value.split(",").map(s => s.trim()).filter(s => s !== "");
                                   form.setValue(`questions.${index}.options`, options);
                                 }}
                               />
