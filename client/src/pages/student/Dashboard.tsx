@@ -2,25 +2,46 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
-import { Play, Clock, CheckCircle } from "lucide-react";
+import { Play, Clock, CheckCircle, FileText, BadgeInfo } from "lucide-react";
 import { useState } from "react";
 import { useSessions } from "@/hooks/use-sessions";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
 
 export default function StudentDashboard() {
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
   const [accessCode, setAccessCode] = useState("");
   const { data: sessions } = useSessions();
+  const { data: submissions } = useQuery<any[]>({
+    queryKey: [`/api/submissions/student/${user?.id}`],
+    enabled: !!user?.id
+  });
+  const { data: exams } = useQuery<any[]>({
+    queryKey: ["/api/exams"]
+  });
   const [error, setError] = useState("");
 
   const handleJoin = () => {
     const session = sessions?.find(s => s.accessCode === accessCode && s.status === "active");
-    if (session) {
-      setLocation(`/student/exam/${session.id}`);
-    } else {
+    if (!session) {
       setError("Invalid or inactive session code.");
+      return;
     }
+
+    // Check if already submitted
+    const alreadySubmitted = submissions?.some(s => s.examId === session.examId);
+    if (alreadySubmitted) {
+      setError("You have already submitted an entry for this examination.");
+      return;
+    }
+
+    setLocation(`/student/exam/${session.id}`);
+  };
+
+  const getExamTitle = (examId: number) => {
+    return exams?.find(e => e.id === examId)?.title || `Exam #${examId}`;
   };
 
   return (
@@ -43,7 +64,7 @@ export default function StudentDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           
           {/* Join Exam Card */}
-          <Card className="shadow-lg border-blue-100 shadow-blue-900/5">
+          <Card className="shadow-lg border-blue-100 shadow-blue-900/5 h-fit">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Play className="w-5 h-5 text-blue-600" />
@@ -63,7 +84,7 @@ export default function StudentDashboard() {
                     setError("");
                   }}
                 />
-                {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+                {error && <p className="text-sm text-red-500 text-center font-medium">{error}</p>}
               </div>
             </CardContent>
             <CardFooter>
@@ -78,30 +99,46 @@ export default function StudentDashboard() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle className="w-5 h-5 text-green-600" />
-                Recent Results
+                Your Grades
               </CardTitle>
-              <CardDescription>View your grades and feedback.</CardDescription>
+              <CardDescription>View your scores and feedback from completed exams.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-3 rounded-lg bg-slate-50 border border-slate-100">
-                  <div>
-                    <h4 className="font-medium text-slate-900">Calculus Midterm</h4>
-                    <p className="text-xs text-slate-500">Oct 12, 2024</p>
+              <div className="space-y-3">
+                {!submissions || submissions.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">No exam history found.</p>
                   </div>
-                  <span className="text-lg font-bold text-green-700">88%</span>
-                </div>
-                <div className="flex justify-between items-center p-3 rounded-lg bg-slate-50 border border-slate-100">
-                  <div>
-                    <h4 className="font-medium text-slate-900">Physics 101</h4>
-                    <p className="text-xs text-slate-500">Sep 28, 2024</p>
-                  </div>
-                  <span className="text-lg font-bold text-blue-700">92%</span>
-                </div>
+                ) : (
+                  submissions.map((submission) => (
+                    <div key={submission.id} className="flex justify-between items-center p-4 rounded-lg bg-white border border-slate-100 shadow-sm">
+                      <div className="space-y-1">
+                        <h4 className="font-semibold text-slate-900 leading-none">{getExamTitle(submission.examId)}</h4>
+                        <div className="flex items-center gap-2">
+                          {submission.status === "graded" ? (
+                            <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-100">Graded</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-100">Not graded yet</Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {submission.status === "graded" ? (
+                          <div className="text-xl font-bold text-slate-900">
+                            {submission.totalScore}<span className="text-xs text-slate-400 font-normal ml-0.5">pts</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-300">--</span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </CardContent>
             <CardFooter>
-              <Button variant="outline" className="w-full">View All History</Button>
+              <Button variant="outline" className="w-full">View Detailed Feedback</Button>
             </CardFooter>
           </Card>
 

@@ -146,9 +146,16 @@ export async function registerRoutes(
   });
 
   // Submissions
-  app.get(api.submissions.list.path, async (req, res) => {
-    const submissions = await storage.getSubmissions(Number(req.params.sessionId));
-    res.json(submissions);
+  app.get("/api/submissions/exam/:examId", async (req, res) => {
+    const examId = Number(req.params.examId);
+    const examSubmissions = await storage.getSubmissionsByExam(examId);
+    res.json(examSubmissions);
+  });
+
+  app.get("/api/submissions/student/:studentId", async (req, res) => {
+    const studentId = Number(req.params.studentId);
+    const studentSubmissions = await storage.getSubmissionsByStudent(studentId);
+    res.json(studentSubmissions);
   });
 
   app.post(api.submissions.create.path, async (req, res) => {
