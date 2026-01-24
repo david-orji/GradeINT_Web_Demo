@@ -88,9 +88,4 @@ export type CreateSubmissionRequest = z.infer<typeof insertSubmissionSchema>;
 
 export type UpdateExamRequest = { status: "published" | "archived" };
 
-export type UpdateSubmissionRequest = {
-  status?: "submitted" | "graded";
-  responses?: Record<string, string>;
-  grades?: Record<string, { score: number, feedback: string }>;
-  totalScore?: number;
-};
+export * from "./models/chat";

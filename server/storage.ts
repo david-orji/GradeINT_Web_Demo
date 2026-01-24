@@ -181,6 +181,11 @@ export class DatabaseStorage implements IStorage {
     return newSession;
   }
 
+  async getSubmission(id: number): Promise<Submission | undefined> {
+    const [submission] = await db.select().from(submissions).where(eq(submissions.id, id));
+    return submission;
+  }
+
   async getSubmissions(sessionId: number): Promise<Submission[]> {
     return await db.select().from(submissions).where(eq(submissions.sessionId, sessionId));
   }

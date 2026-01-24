@@ -5,11 +5,78 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { insertExamSchema, insertQuestionSchema, insertSessionSchema, insertSubmissionSchema, type Question } from "@shared/schema";
 
+import { batchProcess } from "./replit_integrations/batch";
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+});
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   // === API ROUTES ===
+
+  // AI Grading Trigger
+  app.post("/api/submissions/:id/grade", async (req, res) => {
+    try {
+      const submissionId = Number(req.params.id);
+      const submission = await storage.getSubmission(submissionId);
+      if (!submission) return res.status(404).json({ message: "Submission not found" });
+      
+      const exam = await storage.getExam(submission.examId);
+      const questions = await storage.getQuestions(submission.examId);
+      
+      const results = await batchProcess(
+        questions,
+        async (q) => {
+          const studentResponse = submission.responses?.[q.id.toString()] || "No response provided.";
+          
+          const prompt = `
+            You are an expert examiner for the subject: ${exam?.subject}.
+            Question: ${q.text}
+            Rubric/Criteria: ${q.rubric || "Grade based on general correctness and clarity."}
+            Student Response: "${studentResponse}"
+            
+            Evaluate the response and provide a score from 0 to ${q.points}.
+            Also provide a brief, professional feedback explaining the score.
+            
+            Return ONLY a JSON object: { "score": number, "feedback": string }
+          `;
+
+          const response = await openai.chat.completions.create({
+            model: "gpt-5.1",
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" },
+          });
+
+          return JSON.parse(response.choices[0]?.message?.content || "{}");
+        },
+        { concurrency: 2 }
+      );
+
+      const grades: Record<string, { score: number, feedback: string }> = {};
+      let totalScore = 0;
+      
+      questions.forEach((q, idx) => {
+        grades[q.id.toString()] = results[idx];
+        totalScore += results[idx].score || 0;
+      });
+
+      const updated = await storage.updateSubmission(submissionId, {
+        grades,
+        totalScore,
+        status: "submitted" // Keep as submitted until teacher confirms
+      });
+
+      res.json(updated);
+    } catch (err) {
+      console.error("AI Grading Error:", err);
+      res.status(500).json({ message: "AI Grading failed" });
+    }
+  });
 
   // Users
   app.get(api.users.list.path, async (req, res) => {

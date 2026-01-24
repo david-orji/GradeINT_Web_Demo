@@ -1,15 +1,17 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { useExams, useSubmissionsByExam } from "@/hooks/use-exams";
-import { CheckCircle, Clock, AlertCircle, FileText, ChevronRight, Brain, Shield, User } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, FileText, ChevronRight, Brain, Shield, User, Check, X } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
+import { queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function GradingPage() {
   const { user } = useAuth();
@@ -27,6 +29,16 @@ export default function GradingPage() {
   const [viewingSubmissionId, setViewingSubmissionId] = useState<number | null>(null);
   const { data: submissions, isLoading } = useSubmissionsByExam(selectedExamId || 0);
 
+  const updateSubmissionMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: number, updates: any }) => {
+      const res = await apiRequest("PATCH", `/api/submissions/${id}`, updates);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.submissions.listByExam.path, selectedExamId] });
+    }
+  });
+
   const userMap = useMemo(() => {
     const map = new Map();
     users?.forEach((u: any) => map.set(u.id, u.name));
@@ -37,6 +49,27 @@ export default function GradingPage() {
   const viewingSubmission = submissions?.find(s => s.id === viewingSubmissionId);
 
   const awaitingGradingCount = submissions?.filter(s => s.status === "submitted").length || 0;
+
+  const handleToggleGrade = (questionId: string, currentScore: number, maxPoints: number) => {
+    if (!viewingSubmission) return;
+    
+    const newGrades = { ...(viewingSubmission.grades || {}) };
+    const newScore = currentScore === maxPoints ? 0 : maxPoints;
+    
+    newGrades[questionId] = {
+      ...newGrades[questionId],
+      score: newScore,
+      feedback: newGrades[questionId]?.feedback || (newScore === maxPoints ? "Manual Override: Pass" : "Manual Override: Fail")
+    };
+
+    // Recalculate total score
+    const totalScore = Object.values(newGrades).reduce((acc: number, g: any) => acc + (g.score || 0), 0);
+
+    updateSubmissionMutation.mutate({
+      id: viewingSubmission.id,
+      updates: { grades: newGrades, totalScore }
+    });
+  };
 
   if (viewingSubmissionId && viewingSubmission && selectedExam) {
     return (
@@ -63,47 +96,65 @@ export default function GradingPage() {
                       <Brain className="w-4 h-4 text-blue-600" />
                       AI Grading Preview
                     </CardTitle>
-                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded font-bold">SIMULATED</span>
+                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded font-bold">LIVE AI</span>
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-slate-600 leading-relaxed">
                       Our explainable AI model has analyzed this submission against your rubric. 
-                      Each response is cross-referenced with your criteria to ensure objective assessment.
+                      You can manually override any individual grade using the toggle buttons below.
                     </p>
                   </CardContent>
                 </Card>
 
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Responses & Evaluation</h3>
-                  {Object.entries(viewingSubmission.responses || {}).map(([qId, response], idx) => (
-                    <Card key={qId} className="hover-elevate transition-all border-slate-200">
-                      <CardContent className="pt-6">
-                        <div className="flex gap-4">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
-                            {idx + 1}
-                          </div>
-                          <div className="flex-1 space-y-4">
-                            <div>
-                              <p className="text-slate-900 font-medium">{response as string}</p>
+                  {Object.entries(viewingSubmission.responses || {}).map(([qId, response], idx) => {
+                    const grade = viewingSubmission.grades?.[qId];
+                    const isPassed = (grade?.score || 0) > 0;
+                    
+                    return (
+                      <Card key={qId} className="hover-elevate transition-all border-slate-200">
+                        <CardContent className="pt-6">
+                          <div className="flex gap-4">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
+                              {idx + 1}
                             </div>
-                            
-                            <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
-                                  <Shield className="w-3 h-3" />
-                                  GRADEINT AI INSIGHT
-                                </span>
-                                <span className="text-xs font-bold text-green-600">95% Match</span>
+                            <div className="flex-1 space-y-4">
+                              <div className="flex justify-between items-start">
+                                <p className="text-slate-900 font-medium">{response as string}</p>
+                                <Button
+                                  size="sm"
+                                  variant={isPassed ? "default" : "outline"}
+                                  className={isPassed ? "bg-green-600 hover:bg-green-700 text-white" : "text-red-600 border-red-200 hover:bg-red-50"}
+                                  onClick={() => handleToggleGrade(qId, grade?.score || 0, 10)} // Using 10 as default max for now
+                                >
+                                  {isPassed ? <Check className="w-4 h-4 mr-1" /> : <X className="w-4 h-4 mr-1" />}
+                                  {isPassed ? "Pass" : "Fail"}
+                                </Button>
                               </div>
-                              <p className="text-sm text-slate-600 italic">
-                                "The student correctly identifies the core principles. Evidence from the text supports the claim regarding mechanics..."
-                              </p>
+                              
+                              <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
+                                    <Shield className="w-3 h-3" />
+                                    GRADEINT AI INSIGHT
+                                  </span>
+                                  {grade?.score !== undefined && (
+                                    <span className={`text-xs font-bold ${isPassed ? "text-green-600" : "text-red-600"}`}>
+                                      Score: {grade.score}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-slate-600 italic">
+                                  {grade?.feedback || "AI is analyzing this response..."}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -123,12 +174,23 @@ export default function GradingPage() {
                       </div>
                       <div className="pt-4 border-t border-slate-100">
                         <div className="text-center">
-                          <div className="text-3xl font-display font-bold text-slate-900">-- / --</div>
-                          <p className="text-xs text-slate-500 mt-1 uppercase tracking-tighter font-bold">Pending Finalization</p>
+                          <div className="text-3xl font-display font-bold text-slate-900">
+                            {viewingSubmission.totalScore || 0} / --
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1 uppercase tracking-tighter font-bold">
+                            {viewingSubmission.status === "graded" ? "Finalized" : "Draft Grade"}
+                          </p>
                         </div>
                       </div>
-                      <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/10">
-                        Confirm Grading
+                      <Button 
+                        className="w-full bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/10"
+                        onClick={() => updateSubmissionMutation.mutate({ 
+                          id: viewingSubmission.id, 
+                          updates: { status: "graded" } 
+                        })}
+                        disabled={updateSubmissionMutation.isPending || viewingSubmission.status === "graded"}
+                      >
+                        {viewingSubmission.status === "graded" ? "Graded" : "Confirm Grading"}
                       </Button>
                     </CardContent>
                   </Card>
