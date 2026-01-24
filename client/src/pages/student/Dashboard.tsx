@@ -44,6 +44,10 @@ export default function StudentDashboard() {
     return exams?.find(e => e.id === examId)?.title || `Exam #${examId}`;
   };
 
+  const getExamTotalPoints = (examId: number) => {
+    return exams?.find(e => e.id === examId)?.totalPoints || 0;
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Student Nav */}
@@ -111,29 +115,35 @@ export default function StudentDashboard() {
                     <p className="text-sm">No exam history found.</p>
                   </div>
                 ) : (
-                  submissions.map((submission) => (
-                    <div key={submission.id} className="flex justify-between items-center p-4 rounded-lg bg-white border border-slate-100 shadow-sm">
-                      <div className="space-y-1">
-                        <h4 className="font-semibold text-slate-900 leading-none">{getExamTitle(submission.examId)}</h4>
-                        <div className="flex items-center gap-2">
+                  submissions.map((submission) => {
+                    const totalPoints = getExamTotalPoints(submission.examId);
+                    return (
+                      <div key={submission.id} className="flex justify-between items-center p-4 rounded-lg bg-white border border-slate-100 shadow-sm">
+                        <div className="space-y-1">
+                          <h4 className="font-semibold text-slate-900 leading-none">{getExamTitle(submission.examId)}</h4>
+                          <div className="flex items-center gap-2">
+                            {submission.status === "graded" ? (
+                              <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-100">Graded</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-100">Not graded yet</Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
                           {submission.status === "graded" ? (
-                            <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-100">Graded</Badge>
+                            <div className="text-xl font-bold text-slate-900">
+                              {submission.totalScore}
+                              <span className="text-xs text-slate-400 font-normal ml-0.5">
+                                / {totalPoints || "--"}
+                              </span>
+                            </div>
                           ) : (
-                            <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-100">Not graded yet</Badge>
+                            <span className="text-slate-300">--</span>
                           )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        {submission.status === "graded" ? (
-                          <div className="text-xl font-bold text-slate-900">
-                            {submission.totalScore}<span className="text-xs text-slate-400 font-normal ml-0.5">pts</span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-300">--</span>
-                        )}
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </CardContent>
