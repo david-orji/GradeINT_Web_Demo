@@ -209,10 +209,6 @@ export class DatabaseStorage implements IStorage {
     if (!updated) throw new Error("Submission not found");
     return updated;
   }
-
-  async getSubmissionsByExam(examId: number): Promise<Submission[]> {
-    return await db.select().from(submissions).where(eq(submissions.examId, examId));
-  }
 }
 
 export const storage = new DatabaseStorage();
