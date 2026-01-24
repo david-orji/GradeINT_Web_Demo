@@ -46,9 +46,21 @@ export default function GradingPage() {
   }, [users]);
 
   const selectedExam = exams?.find(e => e.id === selectedExamId);
+  const { data: questions } = useQuery<any[]>({
+    queryKey: [api.questions.list.path, selectedExam?.id],
+    enabled: !!selectedExam?.id,
+    queryFn: async () => {
+      const res = await fetch(`/api/exams/${selectedExam?.id}/questions`);
+      if (!res.ok) throw new Error("Failed to fetch questions");
+      return await res.json();
+    }
+  });
+
   const viewingSubmission = submissions?.find(s => s.id === viewingSubmissionId);
 
-  const awaitingGradingCount = submissions?.filter(s => s.status === "submitted").length || 0;
+  const totalPossiblePoints = useMemo(() => {
+    return questions?.reduce((acc: number, q: any) => acc + (q.points || 0), 0) || 0;
+  }, [questions]);
 
   const handleToggleGrade = (questionId: string, currentScore: number, maxPoints: number) => {
     if (!viewingSubmission) return;
@@ -108,7 +120,9 @@ export default function GradingPage() {
 
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Responses & Evaluation</h3>
-                  {Object.entries(viewingSubmission.responses || {}).map(([qId, response], idx) => {
+                  {questions?.map((q, idx) => {
+                    const qId = q.id.toString();
+                    const response = viewingSubmission.responses?.[qId];
                     const grade = viewingSubmission.grades?.[qId];
                     const isPassed = (grade?.score || 0) > 0;
                     
@@ -120,13 +134,23 @@ export default function GradingPage() {
                               {idx + 1}
                             </div>
                             <div className="flex-1 space-y-4">
-                              <div className="flex justify-between items-start">
-                                <p className="text-slate-900 font-medium">{response as string}</p>
+                              <div className="space-y-1">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-tight">Question Preview</p>
+                                <p className="text-sm font-medium text-slate-700">{q.text}</p>
+                              </div>
+
+                              <Separator className="opacity-50" />
+
+                              <div className="flex justify-between items-start gap-4">
+                                <div className="space-y-1 flex-1">
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-tight">Student Response</p>
+                                  <p className="text-slate-900 font-medium">{response || "No response provided."}</p>
+                                </div>
                                 <Button
                                   size="sm"
                                   variant={isPassed ? "default" : "outline"}
                                   className={isPassed ? "bg-green-600 hover:bg-green-700 text-white" : "text-red-600 border-red-200 hover:bg-red-50"}
-                                  onClick={() => handleToggleGrade(qId, grade?.score || 0, 10)} // Using 10 as default max for now
+                                  onClick={() => handleToggleGrade(qId, grade?.score || 0, q.points || 1)}
                                 >
                                   {isPassed ? <Check className="w-4 h-4 mr-1" /> : <X className="w-4 h-4 mr-1" />}
                                   {isPassed ? "Pass" : "Fail"}
@@ -141,7 +165,7 @@ export default function GradingPage() {
                                   </span>
                                   {grade?.score !== undefined && (
                                     <span className={`text-xs font-bold ${isPassed ? "text-green-600" : "text-red-600"}`}>
-                                      Score: {grade.score}
+                                      Score: {grade.score} / {q.points}
                                     </span>
                                   )}
                                 </div>
@@ -175,7 +199,7 @@ export default function GradingPage() {
                       <div className="pt-4 border-t border-slate-100">
                         <div className="text-center">
                           <div className="text-3xl font-display font-bold text-slate-900">
-                            {viewingSubmission.totalScore || 0} / --
+                            {viewingSubmission.totalScore || 0} / {totalPossiblePoints}
                           </div>
                           <p className="text-xs text-slate-500 mt-1 uppercase tracking-tighter font-bold">
                             {viewingSubmission.status === "graded" ? "Finalized" : "Draft Grade"}
