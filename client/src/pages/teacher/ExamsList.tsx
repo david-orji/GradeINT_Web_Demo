@@ -402,9 +402,9 @@ export default function ExamsList() {
                     <div className="col-span-4 pr-4">
                       <div className="font-medium text-slate-900">{exam.title}</div>
                       <div className="text-xs text-slate-500 truncate mt-0.5">
-                        {exam.status === "published" ? `Published ${format(new Date(exam.updatedAt), "MMM. do, yyyy")}` :
-                         exam.status === "closed" ? `Closed ${formatDistanceToNow(new Date(exam.updatedAt), { addSuffix: true })}` :
-                         exam.status === "draft" ? `Draft created ${formatDistanceToNow(new Date(exam.createdAt), { addSuffix: true })}` :
+                        {exam.status === "published" ? `Published ${exam.updatedAt ? format(new Date(exam.updatedAt), "MMM. do, yyyy") : "recently"}` :
+                         exam.status === "closed" ? `Closed ${exam.updatedAt ? formatDistanceToNow(new Date(exam.updatedAt), { addSuffix: true }) : "recently"}` :
+                         exam.status === "draft" ? `Draft created ${exam.createdAt ? formatDistanceToNow(new Date(exam.createdAt), { addSuffix: true }) : "recently"}` :
                          "Active now"}
                       </div>
                     </div>
