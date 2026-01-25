@@ -160,6 +160,14 @@ export async function registerRoutes(
 
   app.post(api.submissions.create.path, async (req, res) => {
     const input = api.submissions.create.input.parse(req.body);
+    
+    // Enforce one active session/submission per student per exam
+    const existing = await storage.getSubmissionsByStudent(input.studentId);
+    const alreadyExists = existing.some(s => s.examId === input.examId);
+    if (alreadyExists) {
+      return res.status(400).json({ message: "You already have an active session or submission for this exam." });
+    }
+
     const submission = await storage.createSubmission(input);
     res.status(201).json(submission);
   });

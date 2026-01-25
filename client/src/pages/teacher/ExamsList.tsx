@@ -23,7 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertExamSchema } from "@shared/schema";
@@ -59,6 +59,40 @@ export default function ExamsList() {
   const [location] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [editingExam, setEditingExam] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("newest");
+
+  const filteredExams = useMemo(() => {
+    if (!exams) return [];
+    
+    let result = [...exams];
+
+    // Search
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(e => 
+        e.title.toLowerCase().includes(q) || 
+        e.subject.toLowerCase().includes(q) ||
+        e.accessCode.toLowerCase().includes(q)
+      );
+    }
+
+    // Filter
+    if (filterStatus !== "all") {
+      result = result.filter(e => e.status === filterStatus);
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      if (sortBy === "newest") return b.id - a.id;
+      if (sortBy === "oldest") return a.id - b.id;
+      if (sortBy === "title") return a.title.localeCompare(b.title);
+      return 0;
+    });
+
+    return result;
+  }, [exams, searchQuery, filterStatus, sortBy]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -306,11 +340,33 @@ export default function ExamsList() {
             <div className="p-4 border-b border-slate-200 flex items-center gap-4 bg-slate-50/50">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input className="pl-9 bg-white" placeholder="Search exams..." />
+                <Input 
+                  className="pl-9 bg-white" 
+                  placeholder="Search exams..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
               <div className="ml-auto flex gap-2">
-                <Button variant="outline" size="sm">Filter</Button>
-                <Button variant="outline" size="sm">Sort</Button>
+                <select 
+                  className="h-9 px-3 rounded-md border border-input bg-background text-sm"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                >
+                  <option value="all">All Status</option>
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="closed">Closed</option>
+                </select>
+                <select 
+                  className="h-9 px-3 rounded-md border border-input bg-background text-sm"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="title">Alphabetical</option>
+                </select>
               </div>
             </div>
 
@@ -327,16 +383,16 @@ export default function ExamsList() {
             <div className="divide-y divide-slate-100">
               {isLoading ? (
                 <div className="p-12 text-center text-slate-400">Loading exams...</div>
-              ) : exams?.length === 0 ? (
+              ) : filteredExams?.length === 0 ? (
                 <div className="p-12 text-center flex flex-col items-center text-slate-500">
                   <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
                     <FileText className="w-6 h-6 text-slate-400" />
                   </div>
-                  <h3 className="text-lg font-medium text-slate-900">No exams yet</h3>
-                  <p className="text-sm mt-1">Create your first exam to get started.</p>
+                  <h3 className="text-lg font-medium text-slate-900">{searchQuery ? "No matches found" : "No exams yet"}</h3>
+                  <p className="text-sm mt-1">{searchQuery ? "Try adjusting your search query." : "Create your first exam to get started."}</p>
                 </div>
               ) : (
-                exams?.map((exam) => (
+                filteredExams?.map((exam) => (
                   <div 
                     key={exam.id} 
                     className="grid grid-cols-12 px-6 py-4 items-center hover:bg-slate-50 transition-colors group cursor-pointer"
