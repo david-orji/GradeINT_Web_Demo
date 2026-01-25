@@ -62,6 +62,9 @@ function Router() {
       <Route path="/student/exam/:sessionId">
         <ProtectedRoute component={ExamSession} allowedRoles={["student"]} />
       </Route>
+      <Route path="/student/session/:sessionId">
+        <ProtectedRoute component={ExamSession} allowedRoles={["student"]} />
+      </Route>
 
       <Route component={NotFound} />
     </Switch>
