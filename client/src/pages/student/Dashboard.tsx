@@ -43,7 +43,7 @@ export default function StudentDashboard() {
       return;
     }
 
-    setLocation(`/student/exam/${session.id}`);
+    setLocation(`/student/session/${session.id}`);
   };
 
   const getExamTitle = (examId: number) => {

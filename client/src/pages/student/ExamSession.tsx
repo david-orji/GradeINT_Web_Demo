@@ -41,17 +41,15 @@ export default function ExamSession() {
         }));
       setShuffledQuestions(shuffled);
     }
-  }, [questions]);
+  }, [questions, shuffledQuestions.length]);
 
   // Re-fetch questions when session is loaded to ensure we have them
   useEffect(() => {
     if (session?.examId) {
       console.log("Session loaded, refetching questions for examId:", session.examId);
-      refetchQuestions().then((result) => {
-        console.log("ExamSession: Questions refetched manually", result.data);
-      });
+      refetchQuestions();
     }
-  }, [session?.examId, refetchQuestions]);
+  }, [session?.examId]);
 
   // Timer logic
   useEffect(() => {
