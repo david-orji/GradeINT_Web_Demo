@@ -27,6 +27,20 @@ export default function ExamSession() {
 
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [shuffledQuestions, setShuffledQuestions] = useState<any[]>([]);
+
+  // Randomize questions and options once
+  useEffect(() => {
+    if (questions && questions.length > 0 && shuffledQuestions.length === 0) {
+      const shuffled = [...questions]
+        .sort(() => Math.random() - 0.5)
+        .map(q => ({
+          ...q,
+          options: Array.isArray(q.options) ? [...q.options].sort(() => Math.random() - 0.5) : q.options
+        }));
+      setShuffledQuestions(shuffled);
+    }
+  }, [questions, shuffledQuestions.length]);
 
   // Re-fetch questions when session is loaded to ensure we have them
   useEffect(() => {
@@ -156,7 +170,7 @@ export default function ExamSession() {
           </CardContent>
         </Card>
 
-        {questions.map((q, index) => (
+        {shuffledQuestions.map((q, index) => (
           <Card key={q.id} className="shadow-sm hover:shadow-md transition-shadow duration-300">
             <CardContent className="pt-6">
               <div className="flex gap-4">
