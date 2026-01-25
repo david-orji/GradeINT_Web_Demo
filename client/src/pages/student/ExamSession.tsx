@@ -31,7 +31,8 @@ export default function ExamSession() {
 
   // Randomize questions and options once
   useEffect(() => {
-    if (questions && questions.length > 0 && shuffledQuestions.length === 0) {
+    if (questions && Array.isArray(questions) && questions.length > 0 && shuffledQuestions.length === 0) {
+      console.log("ExamSession: Shuffling questions", questions);
       const shuffled = [...questions]
         .sort(() => Math.random() - 0.5)
         .map(q => ({
@@ -40,13 +41,15 @@ export default function ExamSession() {
         }));
       setShuffledQuestions(shuffled);
     }
-  }, [questions, shuffledQuestions.length]);
+  }, [questions]);
 
   // Re-fetch questions when session is loaded to ensure we have them
   useEffect(() => {
     if (session?.examId) {
       console.log("Session loaded, refetching questions for examId:", session.examId);
-      refetchQuestions();
+      refetchQuestions().then((result) => {
+        console.log("ExamSession: Questions refetched manually", result.data);
+      });
     }
   }, [session?.examId, refetchQuestions]);
 
@@ -105,7 +108,7 @@ export default function ExamSession() {
     });
   };
 
-  if (sessionLoading || examLoading || questionsLoading) {
+  if (sessionLoading || examLoading || questionsLoading || (questions && Array.isArray(questions) && questions.length > 0 && shuffledQuestions.length === 0)) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center space-y-4">
