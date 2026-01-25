@@ -66,15 +66,15 @@ export default function ExamsList() {
   const filteredExams = useMemo(() => {
     if (!exams) return [];
     
-    let result = [...exams];
+    let result = Array.isArray(exams) ? [...exams] : [];
 
     // Search
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(e => 
-        e.title.toLowerCase().includes(q) || 
-        e.subject.toLowerCase().includes(q) ||
-        e.accessCode.toLowerCase().includes(q)
+        (e.title?.toLowerCase().includes(q) || false) || 
+        (e.subject?.toLowerCase().includes(q) || false) ||
+        (e.accessCode?.toLowerCase().includes(q) || false)
       );
     }
 

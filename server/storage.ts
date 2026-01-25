@@ -31,10 +31,12 @@ export interface IStorage {
   createSession(session: CreateSessionRequest): Promise<ExamSession>;
   
   // Submissions
-  getSubmissions(sessionId: number): Promise<Submission[]>;
   getSubmissionsByExam(examId: number): Promise<Submission[]>;
+  getSubmissionsByStudent(studentId: number): Promise<Submission[]>;
+  getSubmission(id: number): Promise<Submission | undefined>;
+  getSubmissionByStudentAndExam(studentId: number, examId: number): Promise<Submission | undefined>;
   createSubmission(submission: CreateSubmissionRequest): Promise<Submission>;
-  updateSubmission(id: number, updates: UpdateSubmissionRequest): Promise<Submission>;
+  updateSubmission(id: number, updates: Partial<Submission>): Promise<Submission>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -72,7 +74,8 @@ export class DatabaseStorage implements IStorage {
     // If questions are provided, add them
     if (questionsData && Array.isArray(questionsData)) {
       console.log(`Adding ${questionsData.length} questions to exam ${newExam.id}`);
-      for (const [index, q] of questionsData.entries()) {
+      for (let i = 0; i < questionsData.length; i++) {
+        const q = questionsData[i];
         await db.insert(questions).values({
           examId: newExam.id,
           text: q.text,
@@ -80,7 +83,7 @@ export class DatabaseStorage implements IStorage {
           points: q.points || 1,
           options: q.options || [],
           rubric: q.rubric || "",
-          order: index + 1
+          order: i + 1
         });
       }
     }
@@ -125,7 +128,8 @@ export class DatabaseStorage implements IStorage {
     if (questionsData && Array.isArray(questionsData)) {
       console.log(`Updating ${questionsData.length} questions for exam ${id}`);
       await db.delete(questions).where(eq(questions.examId, id));
-      for (const [index, q] of questionsData.entries()) {
+      for (let i = 0; i < questionsData.length; i++) {
+        const q = questionsData[i];
         await db.insert(questions).values({
           examId: id,
           text: q.text,
@@ -133,7 +137,7 @@ export class DatabaseStorage implements IStorage {
           points: q.points || 1,
           options: q.options || [],
           rubric: q.rubric || "",
-          order: index + 1
+          order: i + 1
         });
       }
     }
@@ -183,6 +187,10 @@ export class DatabaseStorage implements IStorage {
     return session;
   }
 
+  async getSubmissions(sessionId: number): Promise<Submission[]> {
+    return await db.select().from(submissions).where(eq(submissions.sessionId, sessionId));
+  }
+
   async createSession(session: CreateSessionRequest): Promise<ExamSession> {
     const [newSession] = await db.insert(examSessions).values(session).returning();
     return newSession;
@@ -190,6 +198,11 @@ export class DatabaseStorage implements IStorage {
 
   async getSubmissionsByExam(examId: number): Promise<Submission[]> {
     return await db.select().from(submissions).where(eq(submissions.examId, examId));
+  }
+
+  async getSubmission(id: number): Promise<Submission | undefined> {
+    const [submission] = await db.select().from(submissions).where(eq(submissions.id, id));
+    return submission;
   }
 
   async getSubmissionsByStudent(studentId: number): Promise<Submission[]> {
@@ -208,7 +221,7 @@ export class DatabaseStorage implements IStorage {
     return newSubmission;
   }
 
-  async updateSubmission(id: number, updates: UpdateSubmissionRequest): Promise<Submission> {
+  async updateSubmission(id: number, updates: Partial<Submission>): Promise<Submission> {
     const [updated] = await db.update(submissions).set({
       ...updates,
       submittedAt: updates.status === "submitted" ? new Date() : undefined

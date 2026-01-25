@@ -85,6 +85,7 @@ export type CreateExamRequest = z.infer<typeof insertExamSchema>;
 export type CreateQuestionRequest = z.infer<typeof insertQuestionSchema>;
 export type CreateSessionRequest = z.infer<typeof insertSessionSchema>;
 export type CreateSubmissionRequest = z.infer<typeof insertSubmissionSchema>;
+export type UpdateSubmissionRequest = Partial<Submission>;
 
 export type UpdateExamRequest = { status: "published" | "archived" };
 
