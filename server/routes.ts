@@ -178,6 +178,12 @@ export async function registerRoutes(
     res.json(submission);
   });
 
+  // Publish Exam
+  app.patch(api.exams.publish.path, async (req, res) => {
+    const exam = await storage.publishExam(Number(req.params.id));
+    res.json(exam);
+  });
+
   app.patch(api.exams.update.path, async (req, res) => {
     const exam = await storage.updateExam(Number(req.params.id), req.body);
     res.json(exam);
