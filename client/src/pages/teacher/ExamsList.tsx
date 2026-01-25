@@ -1,3 +1,4 @@
+import { format, formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -400,7 +401,12 @@ export default function ExamsList() {
                   >
                     <div className="col-span-4 pr-4">
                       <div className="font-medium text-slate-900">{exam.title}</div>
-                      <div className="text-xs text-slate-500 truncate mt-0.5">{exam.description || "No description provided."}</div>
+                      <div className="text-xs text-slate-500 truncate mt-0.5">
+                        {exam.status === "published" ? `Published ${format(new Date(exam.updatedAt), "MMM. do, yyyy")}` :
+                         exam.status === "closed" ? `Closed ${formatDistanceToNow(new Date(exam.updatedAt), { addSuffix: true })}` :
+                         exam.status === "draft" ? `Draft created ${formatDistanceToNow(new Date(exam.createdAt), { addSuffix: true })}` :
+                         "Active now"}
+                      </div>
                     </div>
                     <div className="col-span-2 text-sm text-slate-600">
                       {exam.subject}
