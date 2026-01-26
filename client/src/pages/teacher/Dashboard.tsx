@@ -5,6 +5,7 @@ import { Users, FileText, CheckCircle, Clock } from "lucide-react";
 import { useExams } from "@/hooks/use-exams";
 import { useSessions } from "@/hooks/use-sessions";
 import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
 
 export default function TeacherDashboard() {
   const { user } = useAuth();
