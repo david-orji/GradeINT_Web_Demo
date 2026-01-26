@@ -135,6 +135,21 @@ export async function registerRoutes(
 
   app.post(api.sessions.create.path, async (req, res) => {
     const input = api.sessions.create.input.parse(req.body);
+    const exam = await storage.getExam(input.examId);
+    
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found" });
+    }
+
+    if (exam.status !== "published") {
+      return res.status(400).json({ message: "Exam is not published" });
+    }
+
+    const questions = await storage.getQuestions(input.examId);
+    if (questions.length === 0) {
+      return res.status(400).json({ message: "Exam has no questions" });
+    }
+
     const session = await storage.createSession(input);
     res.status(201).json(session);
   });
@@ -180,7 +195,14 @@ export async function registerRoutes(
 
   // Publish Exam
   app.patch(api.exams.publish.path, async (req, res) => {
-    const exam = await storage.publishExam(Number(req.params.id));
+    const examId = Number(req.params.id);
+    const questions = await storage.getQuestions(examId);
+    
+    if (questions.length === 0) {
+      return res.status(400).json({ message: "Cannot publish exam without questions" });
+    }
+
+    const exam = await storage.publishExam(examId);
     res.json(exam);
   });
 

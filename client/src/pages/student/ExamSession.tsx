@@ -118,8 +118,7 @@ export default function ExamSession() {
             </div>
             <h3 className="text-lg font-bold text-slate-900">Exam Unavailable</h3>
             <p className="text-slate-500 text-sm">
-              {questionsError ? "There was an error loading the questions." : "We couldn't find any questions for this exam."} 
-              Please contact your invigilator.
+              {questionsError ? "Failed to load questions. Please check your connection." : "This exam has no questions. Please contact your invigilator."}
             </p>
             <Button onClick={() => setLocation("/student/dashboard")} variant="outline" className="w-full">
               Return to Dashboard

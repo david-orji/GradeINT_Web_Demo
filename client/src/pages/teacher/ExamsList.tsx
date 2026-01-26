@@ -324,15 +324,22 @@ export default function ExamsList() {
                     </div>
                   </div>
 
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => {
-                      setIsOpen(false);
-                      setEditingExam(null);
-                    }}>Cancel</Button>
-                    <Button type="submit" disabled={createExam.isPending || updateExam.isPending}>
-                      {createExam.isPending || updateExam.isPending ? "Saving..." : "Save Exam"}
-                    </Button>
-                  </DialogFooter>
+                      <DialogFooter className="flex items-center justify-between gap-4">
+                        <div className="flex-1 text-sm text-slate-500">
+                          {fields.length === 0 && (
+                            <span className="text-amber-600 font-medium">Add at least one question to publish this exam later.</span>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button type="button" variant="outline" onClick={() => {
+                            setIsOpen(false);
+                            setEditingExam(null);
+                          }}>Cancel</Button>
+                          <Button type="submit" disabled={createExam.isPending || updateExam.isPending}>
+                            {createExam.isPending || updateExam.isPending ? "Saving..." : "Save Exam"}
+                          </Button>
+                        </div>
+                      </DialogFooter>
                 </form>
               </DialogContent>
             </Dialog>
@@ -442,20 +449,28 @@ export default function ExamsList() {
                       </span>
                     </div>
                     <div className="col-span-2 text-right flex justify-end gap-2">
-                      {exam.status === "draft" && (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-8 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            publishMutation.mutate(exam.id);
-                          }}
-                          disabled={publishMutation.isPending}
-                        >
-                          Publish
-                        </Button>
-                      )}
+                          {exam.status === "draft" && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                publishMutation.mutate(exam.id, {
+                                  onError: (error: any) => {
+                                    toast({ 
+                                      title: "Publishing Failed", 
+                                      description: error.message || "Ensure you have at least one question.", 
+                                      variant: "destructive" 
+                                    });
+                                  }
+                                });
+                              }}
+                              disabled={publishMutation.isPending}
+                            >
+                              Publish
+                            </Button>
+                          )}
 
                       {exam.status === "published" && (
                         <Button 
