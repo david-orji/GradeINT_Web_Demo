@@ -79,10 +79,6 @@ export default function ExamSession() {
   const handleSubmit = () => {
     if (!user || !session) return;
     
-    if (!confirm("Are you sure you want to submit your exam? This action cannot be undone and your responses will be sealed.")) {
-      return;
-    }
-    
     // Convert keys to string numbers for consistency
     const finalResponses: Record<string, string> = {};
     Object.entries(responses).forEach(([key, value]) => {
@@ -154,6 +150,7 @@ export default function ExamSession() {
           <Button 
             onClick={handleSubmit} 
             className="bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20"
+            data-testid="button-submit-exam"
           >
             Submit & Seal
           </Button>

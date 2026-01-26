@@ -264,13 +264,15 @@ export default function ExamsList() {
                     <div className="space-y-4">
                       {fields.map((field, index) => (
                         <div key={field.id} className="p-4 border border-slate-200 rounded-lg space-y-4 relative bg-slate-50/50">
-                          <button 
+                          <Button 
                             type="button"
+                            variant="ghost"
+                            size="icon"
                             onClick={() => remove(index)}
                             className="absolute top-4 right-4 text-slate-400 hover:text-red-500"
                           >
                             <Plus className="w-4 h-4 rotate-45" />
-                          </button>
+                          </Button>
 
                           <div className="space-y-2">
                             <Label>Question {index + 1}</Label>
@@ -462,9 +464,7 @@ export default function ExamsList() {
                           className="h-8 text-xs bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200"
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (confirm("Close this exam? No more submissions will be accepted.")) {
-                              updateExam.mutate({ id: exam.id, status: "closed" } as any);
-                            }
+                            updateExam.mutate({ id: exam.id, status: "closed" } as any);
                           }}
                           disabled={updateExam.isPending}
                         >
@@ -491,9 +491,7 @@ export default function ExamsList() {
                           <DropdownMenuItem 
                             className="text-red-600 focus:text-red-600"
                             onClick={() => {
-                              if (confirm("Are you sure you want to delete this exam?")) {
-                                deleteExam.mutate(exam.id);
-                              }
+                              deleteExam.mutate(exam.id);
                             }}
                           >
                             <Trash2 className="w-4 h-4 mr-2" />

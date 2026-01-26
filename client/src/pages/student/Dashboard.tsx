@@ -15,7 +15,7 @@ export default function StudentDashboard() {
   const [accessCode, setAccessCode] = useState("");
   const { data: sessions } = useSessions();
   const { data: submissions } = useQuery<any[]>({
-    queryKey: [`/api/submissions/student/${user?.id}`],
+    queryKey: ["/api/submissions/student", user?.id],
     enabled: !!user?.id
   });
   const { data: exams } = useQuery<any[]>({
@@ -65,8 +65,8 @@ export default function StudentDashboard() {
           <span className="font-display font-bold text-slate-900 text-lg">GradeINT Student</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-slate-600">{user?.name}</span>
-          <Button variant="outline" size="sm" onClick={logout}>Sign Out</Button>
+          <span className="text-sm text-slate-600" data-testid="text-username">{user?.name}</span>
+          <Button variant="outline" size="sm" onClick={logout} data-testid="button-sign-out">Sign Out</Button>
         </div>
       </nav>
 
@@ -89,6 +89,7 @@ export default function StudentDashboard() {
                   className="text-center text-2xl tracking-widest uppercase font-mono h-14"
                   maxLength={8}
                   value={accessCode}
+                  data-testid="input-access-code"
                   onChange={(e) => {
                     setAccessCode(e.target.value.toUpperCase());
                     setError("");
@@ -98,7 +99,12 @@ export default function StudentDashboard() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-lg" onClick={handleJoin} disabled={accessCode.length < 8}>
+              <Button 
+                className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-lg" 
+                onClick={handleJoin} 
+                disabled={accessCode.length < 8}
+                data-testid="button-start-exam"
+              >
                 Start Exam
               </Button>
             </CardFooter>
