@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 export default function ExamSession() {
-  const [, params] = useRoute("/student/exam/:sessionId");
+  const [, params] = useRoute("/student/session/:sessionId");
   const sessionId = parseInt(params?.sessionId || "0");
   const [, setLocation] = useLocation();
   
