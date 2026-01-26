@@ -20,8 +20,9 @@ export default function ExamSession() {
   
   const { user } = useAuth();
   const { data: session, isLoading: sessionLoading } = useSessionQuery(sessionId);
-  const { data: exam, isLoading: examLoading } = useExam(session?.examId || 0);
-  const { data: questions, isLoading: questionsLoading, refetch: refetchQuestions } = useExamQuestions(session?.examId || 0);
+  const examId = session?.examId;
+  const { data: exam, isLoading: examLoading } = useExam(examId || 0);
+  const { data: questions, isLoading: questionsLoading, isSuccess: questionsSuccess, error: questionsError } = useExamQuestions(examId || 0, { enabled: !!examId });
   const submitMutation = useCreateSubmission();
   const { toast } = useToast();
 
@@ -42,14 +43,6 @@ export default function ExamSession() {
       setShuffledQuestions(shuffled);
     }
   }, [questions, shuffledQuestions.length]);
-
-  // Re-fetch questions when session is loaded to ensure we have them
-  useEffect(() => {
-    if (session?.examId) {
-      console.log("Session loaded, refetching questions for examId:", session.examId);
-      refetchQuestions();
-    }
-  }, [session?.examId]);
 
   // Timer logic
   useEffect(() => {
@@ -102,7 +95,7 @@ export default function ExamSession() {
     });
   };
 
-  if (sessionLoading || examLoading || questionsLoading || (questions && Array.isArray(questions) && questions.length > 0 && shuffledQuestions.length === 0)) {
+  if (sessionLoading || (examId && (examLoading || questionsLoading)) || (questions && Array.isArray(questions) && questions.length > 0 && shuffledQuestions.length === 0)) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -113,7 +106,9 @@ export default function ExamSession() {
     );
   }
 
-  if (!exam || !questions || questions.length === 0) {
+  const isExamUnavailable = questionsError || (questionsSuccess && (!questions || questions.length === 0));
+
+  if (!exam || isExamUnavailable) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <Card className="max-w-md w-full border-red-100 shadow-xl shadow-red-900/5">
@@ -122,7 +117,10 @@ export default function ExamSession() {
               <AlertCircle className="w-6 h-6 text-red-600" />
             </div>
             <h3 className="text-lg font-bold text-slate-900">Exam Unavailable</h3>
-            <p className="text-slate-500 text-sm">We couldn't find any questions for this exam. Please contact your invigilator.</p>
+            <p className="text-slate-500 text-sm">
+              {questionsError ? "There was an error loading the questions." : "We couldn't find any questions for this exam."} 
+              Please contact your invigilator.
+            </p>
             <Button onClick={() => setLocation("/student/dashboard")} variant="outline" className="w-full">
               Return to Dashboard
             </Button>

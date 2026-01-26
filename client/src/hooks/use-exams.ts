@@ -97,16 +97,16 @@ export function useDeleteExam() {
 }
 
 // Questions
-export function useExamQuestions(examId: number) {
+export function useExamQuestions(examId: number, options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: [api.questions.list.path, examId],
+    queryKey: ["examQuestions", examId],
     queryFn: async () => {
       const url = buildUrl(api.questions.list.path, { examId });
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch questions");
       return api.questions.list.responses[200].parse(await res.json());
     },
-    enabled: !!examId,
+    enabled: Boolean(examId) && examId > 0 && options?.enabled !== false,
   });
 }
 

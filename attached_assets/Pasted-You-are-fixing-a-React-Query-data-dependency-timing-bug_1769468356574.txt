@@ -1,0 +1,48 @@
+You are fixing a React Query data dependency timing bug that causes the ExamSession screen to show “Exam Unavailable / Questions Unavailable”.
+
+Context
+- File: ExamSession.tsx
+- Current code calls:
+  useExamQuestions(session?.examId || 0)
+  which triggers a fetch with examId = 0 on first render (before session loads),
+  caching an empty result or error, and the UI gets stuck on questions.length === 0.
+- There is also a useEffect that calls refetchQuestions() when session.examId exists,
+  but refetch does not change the query key, so it still refetches the old query (examId=0).
+
+Goal
+- Prevent questions fetch from running until a valid examId exists.
+- Ensure the query key and request URL always reflect the real examId.
+- Avoid extra network calls.
+- Keep the fix minimal, localized, and efficient.
+- Do not change backend logic.
+
+Requirements
+1) Update the useExamQuestions hook to accept an options argument with `enabled`, OR expose a second hook that is dependency-safe.
+   - Example signature:
+     useExamQuestions(examId: number, options?: { enabled?: boolean })
+2) In the hook, pass `enabled: Boolean(examId) && enabledFromOptions !== false`
+   - Default enabled should be true when examId is valid (>0).
+3) Ensure the queryKey includes the examId:
+   - queryKey must be something like: ["examQuestions", examId]
+   - The fetch function must call the API route built from that examId.
+4) Update ExamSession.tsx to:
+   - Compute a stable examId: const examId = session?.examId
+   - Call useExamQuestions(examId ?? 0, { enabled: !!examId })
+   - Remove the manual refetchQuestions useEffect entirely (it is redundant once enabled + queryKey are correct).
+5) Tighten the “loading” and “unavailable” UI conditions:
+   - Show loading while session is loading.
+   - Do not treat “questions undefined because query is disabled” as “unavailable”.
+   - Only show “Exam Unavailable” when examId is known AND the questions query finished AND questions.length === 0, OR when the query errors.
+6) Add clear console logs only if already present style is used (optional), but do not spam logs.
+7) Keep changes minimal: only touch use-exams.ts and ExamSession.tsx unless absolutely necessary.
+
+Deliverables
+- Provide the exact code edits (diff style or full updated functions) for:
+  a) hooks/use-exams.ts (useExamQuestions)
+  b) ExamSession.tsx (the hook usage and UI guards)
+- Ensure TypeScript types are correct.
+- Ensure no fetch is made to /api/exams/0/questions.
+- Confirm behavior:
+  - On first render: session loads; questions query is disabled.
+  - After session loads with examId: questions query runs once using correct examId and caches correctly.
+  - “Exam Unavailable” appears only when there truly are no questions for that exam or the request fails.
