@@ -1,0 +1,74 @@
+You are fixing a GradeINT product bug where students see “Questions Unavailable” because published exams can exist with zero questions. Evidence from server logs: GET /api/exams/12/questions returns 200 with [].
+
+Goal
+Make it impossible for a student to start an exam session for an exam that has zero questions. Exams without questions must remain Draft and cannot be Published or assigned to a session. The fix must be enforced server-side (non-negotiable) and reflected in the teacher UI.
+
+Non-negotiable product rules
+1) Exam states:
+   - DRAFT: editable, can have 0+ questions, cannot be taken by students
+   - PUBLISHED: locked, MUST have at least 1 question, can be assigned to sessions
+2) Publishing must be blocked if questionCount == 0.
+3) Creating a session (or starting an attempt) must be blocked if the exam is not PUBLISHED or has questionCount == 0.
+4) Do not “auto-create” placeholder questions. Do not silently publish. Fail loudly with a clear error message.
+
+Backend tasks (Express)
+A) Add/confirm an exam status field exists:
+   - If exams table already has status, use it.
+   - If not, add `status` with allowed values ("draft", "published") default "draft".
+B) Implement/patch publish endpoint:
+   - Endpoint: POST /api/exams/:examId/publish (or the existing publish route)
+   - Steps:
+     1. Verify exam exists
+     2. Count questions for that examId (SELECT COUNT(*) FROM questions WHERE examId = ?)
+     3. If count == 0: return 400 with JSON { message: "Cannot publish exam without questions" }
+     4. Else update exam.status = "published" and return the updated exam
+C) Guard session creation:
+   - Wherever sessions are created (POST /api/sessions or similar):
+     1. Load the exam referenced by examId
+     2. If exam.status !== "published": return 400 { message: "Exam is not published" }
+     3. Count questions; if count == 0: return 400 { message: "Exam has no questions" }
+     4. Only then create the session
+D) Optional safety net: Guard questions list endpoint for students
+   - If you can detect student context, return 403 if exam is not published.
+   - If not, at least ensure sessions can’t exist for invalid exams so this won’t be reached.
+
+Storage layer tasks (storage.ts)
+- Add helper functions if needed:
+  - getQuestionCount(examId): number
+  - publishExam(examId): updates status
+  - getExam(examId): returns exam with status
+- Keep these functions small and used by routes.
+
+Frontend tasks (Teacher UI)
+E) Teacher exam builder flow must be “single continuous experience”:
+   - After creating exam metadata, route directly into question builder for that examId
+   - Teacher does not need to “leave and come back later”
+F) Publish button behavior:
+   - Disabled when questionsCount == 0
+   - On click, call publish endpoint
+   - If backend returns error, show toast with the message
+G) Session creation UI:
+   - If publish is blocked, show a clear message: “Add at least one question to publish this exam.”
+
+Student UI tasks (ExamSession.tsx)
+H) Improve error message clarity:
+   - If questions endpoint returns [] after successful fetch, show “This exam has no questions. Contact your invigilator.”
+   - If fetch fails, show “Failed to load questions” with error message
+   - But note: after backend guards, students should rarely see the empty state.
+
+Deliverables
+1) Provide exact code edits (diff style) for:
+   - routes.ts: publish route + session creation guard
+   - storage.ts: any new helper functions
+   - any schema/migration code if status field doesn’t exist
+2) Provide exact teacher UI changes:
+   - Where exam is created, auto-navigate to question builder
+   - Publish button disabled logic and API call
+3) Ensure behavior with a test:
+   - Create exam with 0 questions -> publish returns 400
+   - Attempt to create session for draft exam -> 400
+   - Add 1 question -> publish succeeds
+   - Create session -> succeeds
+   - Student start exam -> GET /api/exams/:id/questions returns non-empty array
+
+Keep changes minimal and efficient. Enforce rules on backend first; frontend should guide UX but not be relied on for correctness.
