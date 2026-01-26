@@ -187,7 +187,7 @@ export default function ExamsList() {
         questions: questionsData // Ensure questions are passed to create as well
       } as any, {
         onSuccess: (newExam) => {
-          toast({ title: "Success", description: "Exam and questions have been saved." });
+          toast({ title: "Success", description: "Exam metadata saved. You can now publish it." });
           setIsOpen(false);
           form.reset();
         }
