@@ -167,6 +167,16 @@ export default function ExamsList() {
     if (!user) return;
     const { questions: questionsData, ...examData } = data;
     
+    // Explicitly validate that at least one question exists before submitting
+    if (!questionsData || questionsData.length === 0) {
+      toast({ 
+        title: "Validation Error", 
+        description: "Please add at least one question to the exam.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     if (editingExam) {
       updateExam.mutate({
         id: editingExam.id,

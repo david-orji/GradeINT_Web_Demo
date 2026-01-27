@@ -123,13 +123,13 @@ export class DatabaseStorage implements IStorage {
     }
 
     const [updated] = await db.update(exams)
-      .set(examFields)
+      .set({ ...examFields, updatedAt: new Date() })
       .where(eq(exams.id, id))
       .returning();
       
     if (!updated) throw new Error("Exam not found");
 
-    if (questionsData && Array.isArray(questionsData)) {
+    if (questionsData && Array.isArray(questionsData) && questionsData.length > 0) {
       console.log(`Updating ${questionsData.length} questions for exam ${id}`);
       await db.delete(questions).where(eq(questions.examId, id));
       for (let i = 0; i < questionsData.length; i++) {
