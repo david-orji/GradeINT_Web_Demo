@@ -174,6 +174,7 @@ export default function ExamsList() {
         questions: questionsData
       } as any, {
         onSuccess: () => {
+          toast({ title: "Success", description: "Exam and questions updated." });
           setIsOpen(false);
           setEditingExam(null);
           form.reset();

@@ -5,7 +5,7 @@ import {
   type CreateExamRequest, type CreateQuestionRequest, type CreateSessionRequest, 
   type CreateSubmissionRequest, type UpdateSubmissionRequest
 } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -72,7 +72,7 @@ export class DatabaseStorage implements IStorage {
     const [newExam] = await db.insert(exams).values({ ...examFields, accessCode }).returning();
     
     // If questions are provided, add them
-    if (questionsData && Array.isArray(questionsData)) {
+    if (questionsData && Array.isArray(questionsData) && questionsData.length > 0) {
       console.log(`Adding ${questionsData.length} questions to exam ${newExam.id}`);
       for (let i = 0; i < questionsData.length; i++) {
         const q = questionsData[i];
@@ -90,11 +90,15 @@ export class DatabaseStorage implements IStorage {
 
     // Auto-create a session for the published exam to make it immediately testable
     if (examFields.status === "published") {
-      await db.insert(examSessions).values({
-        examId: newExam.id,
-        accessCode: accessCode,
-        status: "active",
-      });
+      // Check if questions were actually added before creating session
+      const [qCount] = await db.select({ count: sql<number>`count(*)` }).from(questions).where(eq(questions.examId, newExam.id));
+      if (Number(qCount.count) > 0) {
+        await db.insert(examSessions).values({
+          examId: newExam.id,
+          accessCode: accessCode,
+          status: "active",
+        });
+      }
     }
     return newExam;
   }
