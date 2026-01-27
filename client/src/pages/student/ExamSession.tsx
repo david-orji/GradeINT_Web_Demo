@@ -83,8 +83,9 @@ export default function ExamSession() {
       examId: session.examId,
       studentId: user.id,
       responses: finalResponses,
-      status: "submitted"
-    }, {
+      status: "submitted",
+      submittedAt: new Date()
+    } as any, {
       onSuccess: () => {
         toast({ title: "Submitted Successfully", description: "Your exam has been recorded." });
         setLocation("/student/dashboard");

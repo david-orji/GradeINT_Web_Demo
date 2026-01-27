@@ -226,10 +226,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateSubmission(id: number, updates: Partial<Submission>): Promise<Submission> {
-    const [updated] = await db.update(submissions).set({
-      ...updates,
-      submittedAt: updates.status === "submitted" ? new Date() : undefined
-    }).where(eq(submissions.id, id)).returning();
+    const updateData: any = { ...updates };
+    if (updates.status === "submitted") {
+      updateData.submittedAt = new Date();
+    }
+    
+    const [updated] = await db.update(submissions)
+      .set(updateData)
+      .where(eq(submissions.id, id))
+      .returning();
     if (!updated) throw new Error("Submission not found");
     return updated;
   }
