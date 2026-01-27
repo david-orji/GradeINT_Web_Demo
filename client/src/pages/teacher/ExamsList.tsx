@@ -195,10 +195,10 @@ export default function ExamsList() {
         ...examData,
         teacherId: user.id,
         status: "draft",
-        questions: questionsData // Ensure questions are passed to create as well
+        questions: questionsData
       } as any, {
-        onSuccess: (newExam) => {
-          toast({ title: "Success", description: "Exam metadata saved. You can now publish it." });
+        onSuccess: () => {
+          toast({ title: "Success", description: "Exam and questions created." });
           setIsOpen(false);
           form.reset();
         }
