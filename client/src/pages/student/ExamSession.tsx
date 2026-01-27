@@ -52,6 +52,14 @@ export default function ExamSession() {
   }, [exam]);
 
   useEffect(() => {
+    if (timeLeft === 0) {
+      toast({
+        title: "Time Expired",
+        description: "Your exam is being automatically submitted.",
+        variant: "destructive"
+      });
+      handleSubmit();
+    }
     if (timeLeft === null || timeLeft <= 0) return;
     const timer = setInterval(() => {
       setTimeLeft(prev => (prev ? prev - 1 : 0));
