@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
+import { formatSubmissionTime } from "@/lib/utils";
 
 export default function GradingPage() {
   const { user } = useAuth();
@@ -312,7 +313,9 @@ export default function GradingPage() {
                           <h4 className="font-medium text-slate-900">
                             {userMap.get(submission.studentId) || `Student #${submission.studentId}`}
                           </h4>
-                          <p className="text-xs text-slate-500">Submitted on {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString() : "N/A"}</p>
+                          <p className="text-xs text-slate-500">
+                            Submitted {submission.submittedAt ? formatSubmissionTime(submission.submittedAt) : "N/A"}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
