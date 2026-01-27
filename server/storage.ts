@@ -70,12 +70,14 @@ export class DatabaseStorage implements IStorage {
     const { questions: questionsData, ...examFields } = exam as any;
     const accessCode = this.generateAccessCode();
     const [newExam] = await db.insert(exams).values({ ...examFields, accessCode }).returning();
+    console.log(`Created new exam with ID: ${newExam.id}`);
     
     // If questions are provided, add them
     if (questionsData && Array.isArray(questionsData) && questionsData.length > 0) {
       console.log(`Adding ${questionsData.length} questions to exam ${newExam.id}`);
       for (let i = 0; i < questionsData.length; i++) {
         const q = questionsData[i];
+        console.log(`Inserting question ${i+1} for exam ${newExam.id}: ${q.text}`);
         await db.insert(questions).values({
           examId: newExam.id,
           text: q.text,

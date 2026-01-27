@@ -93,17 +93,11 @@ export async function registerRoutes(
 
   app.post(api.exams.create.path, async (req, res) => {
     try {
-      const input = api.exams.create.input.parse(req.body);
-      const exam = await storage.createExam(input);
+      const exam = await storage.createExam(req.body);
       res.status(201).json(exam);
     } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({
-          message: err.errors[0].message,
-          field: err.errors[0].path.join('.'),
-        });
-      }
-      throw err;
+      console.error("Exam Creation Error:", err);
+      res.status(500).json({ message: "Failed to create exam" });
     }
   });
 

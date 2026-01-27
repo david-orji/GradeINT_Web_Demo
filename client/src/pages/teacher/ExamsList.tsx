@@ -198,9 +198,12 @@ export default function ExamsList() {
         questions: questionsData
       } as any, {
         onSuccess: () => {
-          toast({ title: "Success", description: "Exam and questions created." });
+          toast({ title: "Success", description: "Exam and questions created successfully." });
           setIsOpen(false);
-          form.reset();
+          form.reset({
+            durationMinutes: 60,
+            questions: [{ text: "", type: "short_answer", points: 1 }]
+          });
         }
       });
     }
