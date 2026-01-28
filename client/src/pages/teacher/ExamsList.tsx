@@ -254,6 +254,16 @@ export default function ExamsList() {
                     </div>
                   </div>
                   
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Instructions for Students</Label>
+                    <Textarea 
+                      id="description" 
+                      {...form.register("description")} 
+                      placeholder="Enter instructions that students will see before and during the exam..."
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                  
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="duration">Duration (mins)</Label>
