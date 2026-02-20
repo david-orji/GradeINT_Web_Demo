@@ -36,7 +36,7 @@ export async function registerRoutes(
       const session = await storage.getSession(submission.sessionId);
       if (!session) return res.status(404).json({ message: "Session not found" });
 
-      if (session.status !== "closed") {
+      if (session.status !== "completed") {
         return res.status(400).json({ message: "Please, close exam before grading" });
       }
 

@@ -110,6 +110,52 @@ export default function StudentDashboard() {
             </CardFooter>
           </Card>
 
+          {/* Submissions List Card */}
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                Submissions
+              </CardTitle>
+              <CardDescription>View your ungraded submissions and their status.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {!submissions || submissions.filter(s => s.status !== "graded").length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">No ungraded submissions found.</p>
+                  </div>
+                ) : (
+                  submissions.filter(s => s.status !== "graded").map((submission) => {
+                    return (
+                      <div key={submission.id} className="flex justify-between items-center p-4 rounded-lg bg-white border border-slate-100 shadow-sm">
+                        <div className="space-y-1">
+                          <h4 className="font-semibold text-slate-900 leading-none">{getExamTitle(submission.examId)}</h4>
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <Clock className="w-3 h-3" />
+                            {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            }) : "N/A"}
+                          </div>
+                        </div>
+                        <div>
+                          <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-100 uppercase text-[10px] font-bold tracking-wider">
+                            Pending Review
+                          </Badge>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Previous Results Card */}
           <Card className="border-slate-200">
             <CardHeader>
@@ -121,37 +167,29 @@ export default function StudentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {!submissions || submissions.length === 0 ? (
+                {!submissions || submissions.filter(s => s.status === "graded").length === 0 ? (
                   <div className="text-center py-8 text-slate-400">
-                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">No exam history found.</p>
+                    <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">No graded exams found yet.</p>
                   </div>
                 ) : (
-                  submissions.map((submission) => {
+                  submissions.filter(s => s.status === "graded").map((submission) => {
                     const totalPoints = getExamTotalPoints(submission.examId);
                     return (
                       <div key={submission.id} className="flex justify-between items-center p-4 rounded-lg bg-white border border-slate-100 shadow-sm">
                         <div className="space-y-1">
                           <h4 className="font-semibold text-slate-900 leading-none">{getExamTitle(submission.examId)}</h4>
                           <div className="flex items-center gap-2">
-                            {submission.status === "graded" ? (
-                              <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-100">Graded</Badge>
-                            ) : (
-                              <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-100">Not graded yet</Badge>
-                            )}
+                            <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-100 uppercase text-[10px] font-bold tracking-wider">Graded</Badge>
                           </div>
                         </div>
                         <div className="text-right">
-                          {submission.status === "graded" ? (
-                            <div className="text-xl font-bold text-slate-900">
-                              {submission.totalScore}
-                              <span className="text-xs text-slate-400 font-normal ml-0.5">
-                                / {totalPoints || "--"}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-slate-300">--</span>
-                          )}
+                          <div className="text-xl font-bold text-slate-900">
+                            {submission.totalScore}
+                            <span className="text-xs text-slate-400 font-normal ml-0.5">
+                              / {totalPoints || "--"}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     );
