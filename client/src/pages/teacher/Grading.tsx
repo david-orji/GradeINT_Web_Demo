@@ -13,9 +13,11 @@ import { Progress } from "@/components/ui/progress";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { formatSubmissionTime } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 export default function GradingPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { data: exams } = useExams(user?.id);
   const { data: users } = useQuery({
     queryKey: [api.users.list.path],
@@ -29,6 +31,15 @@ export default function GradingPage() {
   const [selectedExamId, setSelectedExamId] = useState<number | null>(null);
   const [viewingSubmissionId, setViewingSubmissionId] = useState<number | null>(null);
   const { data: submissions, isLoading } = useSubmissionsByExam(selectedExamId || 0);
+
+  const { data: sessions } = useQuery<any[]>({
+    queryKey: [api.sessions.list.path],
+    queryFn: async () => {
+      const res = await fetch(api.sessions.list.path);
+      if (!res.ok) throw new Error("Failed to fetch sessions");
+      return await res.json();
+    }
+  });
 
   const updateSubmissionMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: number, updates: any }) => {
@@ -328,7 +339,19 @@ export default function GradingPage() {
                           variant="ghost" 
                           size="sm" 
                           className="text-blue-600 hover:text-blue-700 flex items-center gap-1 group"
-                          onClick={() => setViewingSubmissionId(submission.id)}
+                          onClick={() => {
+                            const sub = submissions?.find(s => s.id === submission.id);
+                            const session = sessions?.find(s => s.id === sub?.sessionId);
+                            if (session && session.status !== "closed") {
+                              toast({
+                                title: "Cannot Grade",
+                                description: "Please, close exam before grading",
+                                variant: "destructive"
+                              });
+                              return;
+                            }
+                            setViewingSubmissionId(submission.id);
+                          }}
                         >
                           Review
                           <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
