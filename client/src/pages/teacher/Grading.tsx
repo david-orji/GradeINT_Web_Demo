@@ -78,10 +78,10 @@ export default function GradingPage() {
 
   const handleToggleGrade = (questionId: string, currentScore: number, maxPoints: number) => {
     if (!viewingSubmission) return;
-    
+
     const newGrades = { ...(viewingSubmission.grades || {}) };
     const newScore = currentScore === maxPoints ? 0 : maxPoints;
-    
+
     newGrades[questionId] = {
       ...newGrades[questionId],
       score: newScore,
@@ -126,7 +126,7 @@ export default function GradingPage() {
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-slate-600 leading-relaxed">
-                      Our explainable AI model has analyzed this submission against your rubric. 
+                      Our explainable AI model has analyzed this submission against your rubric.
                       You can manually override any individual grade using the toggle buttons below.
                     </p>
                   </CardContent>
@@ -139,7 +139,7 @@ export default function GradingPage() {
                     const response = viewingSubmission.responses?.[qId];
                     const grade = viewingSubmission.grades?.[qId];
                     const isPassed = (grade?.score || 0) > 0;
-                    
+
                     return (
                       <Card key={qId} className="hover-elevate transition-all border-slate-200">
                         <CardContent className="pt-6">
@@ -170,7 +170,7 @@ export default function GradingPage() {
                                   {isPassed ? "Pass" : "Fail"}
                                 </Button>
                               </div>
-                              
+
                               <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
                                 <div className="flex items-center justify-between mb-2">
                                   <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
@@ -220,11 +220,11 @@ export default function GradingPage() {
                           </p>
                         </div>
                       </div>
-                      <Button 
+                      <Button
                         className="w-full bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/10"
-                        onClick={() => updateSubmissionMutation.mutate({ 
-                          id: viewingSubmission.id, 
-                          updates: { status: "graded" } 
+                        onClick={() => updateSubmissionMutation.mutate({
+                          id: viewingSubmission.id,
+                          updates: { status: "graded" }
                         })}
                         disabled={updateSubmissionMutation.isPending || viewingSubmission.status === "graded"}
                       >
@@ -252,22 +252,22 @@ export default function GradingPage() {
           </header>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <StatCard 
-              title="Awaiting Review" 
-              value={awaitingGradingCount} 
-              icon={Clock} 
+            <StatCard
+              title="Awaiting Review"
+              value={awaitingGradingCount}
+              icon={Clock}
               colorClass="bg-amber-100 text-amber-700"
             />
-            <StatCard 
-              title="Graded This Week" 
-              value="24" 
-              icon={CheckCircle} 
+            <StatCard
+              title="Graded This Week"
+              value="24"
+              icon={CheckCircle}
               colorClass="bg-green-100 text-green-700"
             />
-            <StatCard 
-              title="Integrity Flags" 
-              value="0" 
-              icon={AlertCircle} 
+            <StatCard
+              title="Integrity Flags"
+              value="0"
+              icon={AlertCircle}
               colorClass="bg-blue-100 text-blue-700"
             />
           </div>
@@ -279,7 +279,7 @@ export default function GradingPage() {
                 Select Exam
               </div>
               <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
-                {exams?.filter(e => e.status === "published").map(exam => (
+                {exams?.filter(e => e.status === "closed").map(exam => (
                   <button
                     key={exam.id}
                     onClick={() => {
@@ -330,19 +330,18 @@ export default function GradingPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                          submission.status === "graded" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${submission.status === "graded" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                          }`}>
                           {submission.status}
                         </span>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="text-blue-600 hover:text-blue-700 flex items-center gap-1 group"
                           onClick={() => {
                             const sub = submissions?.find(s => s.id === submission.id);
                             const session = sessions?.find(s => s.id === sub?.sessionId);
-                            if (session && session.status !== "closed") {
+                            if (session && session.status === "active") {
                               toast({
                                 title: "Cannot Grade",
                                 description: "Please, close exam before grading",

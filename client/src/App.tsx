@@ -9,6 +9,7 @@ import Login from "@/pages/Login";
 import TeacherDashboard from "@/pages/teacher/Dashboard";
 import ExamsList from "@/pages/teacher/ExamsList";
 import Grading from "@/pages/teacher/Grading";
+import ScoreSheet from "@/pages/teacher/ScoreSheet";
 import StudentDashboard from "@/pages/student/Dashboard";
 import ExamSession from "@/pages/student/ExamSession";
 import NotFound from "@/pages/not-found";
@@ -20,7 +21,7 @@ function ProtectedRoute({ component: Component, allowedRoles }: { component: Rea
   if (isLoading) return <div className="flex h-screen items-center justify-center text-slate-500">Authenticating...</div>;
 
   if (!user) return <Redirect to="/login" />;
-  
+
   if (!allowedRoles.includes(user.role)) {
     return <div className="flex h-screen items-center justify-center text-red-500">Access Denied</div>;
   }
@@ -34,7 +35,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
-      
+
       {/* Root redirect */}
       <Route path="/">
         {() => {
@@ -53,6 +54,9 @@ function Router() {
       </Route>
       <Route path="/teacher/grading">
         <ProtectedRoute component={Grading} allowedRoles={["teacher", "admin"]} />
+      </Route>
+      <Route path="/teacher/scoresheet">
+        <ProtectedRoute component={ScoreSheet} allowedRoles={["teacher", "admin"]} />
       </Route>
 
       {/* Student Routes */}

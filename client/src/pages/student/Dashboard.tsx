@@ -3,10 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Play, Clock, CheckCircle, FileText, BadgeInfo } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useSessions } from "@/hooks/use-sessions";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 
 export default function StudentDashboard() {
@@ -16,12 +16,46 @@ export default function StudentDashboard() {
   const { data: sessions } = useSessions();
   const { data: submissions } = useQuery<any[]>({
     queryKey: ["/api/submissions/student", user?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/submissions/student/${user?.id}`);
+      if (!res.ok) throw new Error("Failed to fetch submissions");
+      return res.json();
+    },
     enabled: !!user?.id
   });
   const { data: exams } = useQuery<any[]>({
     queryKey: ["/api/exams"]
   });
   const [error, setError] = useState("");
+
+  // Fetch questions for each graded exam to compute real total points
+  const gradedExamIds = useMemo(() => {
+    const ids = (submissions ?? [])
+      .filter(s => s.status === "graded")
+      .map(s => s.examId as number);
+    return Array.from(new Set(ids));
+  }, [submissions]);
+
+  const questionResults = useQueries({
+    queries: gradedExamIds.map(examId => ({
+      queryKey: ["examQuestions", examId],
+      queryFn: async () => {
+        const res = await fetch(`/api/exams/${examId}/questions`);
+        if (!res.ok) throw new Error("Failed to fetch questions");
+        return res.json() as Promise<any[]>;
+      },
+      staleTime: 5 * 60 * 1000, // 5 min — closed exam questions never change
+    }))
+  });
+
+  const examTotalPointsMap = useMemo(() => {
+    const map: Record<number, number> = {};
+    gradedExamIds.forEach((examId, idx) => {
+      const qs: any[] = questionResults[idx]?.data ?? [];
+      map[examId] = qs.reduce((sum, q) => sum + (q.points || 0), 0);
+    });
+    return map;
+  }, [gradedExamIds, questionResults]);
 
   const handleJoin = () => {
     const session = sessions?.find(s => s.accessCode === accessCode && s.status === "active");
@@ -50,10 +84,6 @@ export default function StudentDashboard() {
     return exams?.find(e => e.id === examId)?.title || `Exam #${examId}`;
   };
 
-  const getExamTotalPoints = (examId: number) => {
-    return exams?.find(e => e.id === examId)?.totalPoints || 0;
-  };
-
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Student Nav */}
@@ -72,7 +102,7 @@ export default function StudentDashboard() {
 
       <main className="max-w-5xl mx-auto p-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          
+
           {/* Join Exam Card */}
           <Card className="shadow-lg border-blue-100 shadow-blue-900/5 h-fit">
             <CardHeader>
@@ -84,8 +114,8 @@ export default function StudentDashboard() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Input 
-                  placeholder="Enter 8-character code" 
+                <Input
+                  placeholder="Enter 8-character code"
                   className="text-center text-2xl tracking-widest uppercase font-mono h-14"
                   maxLength={8}
                   value={accessCode}
@@ -99,9 +129,9 @@ export default function StudentDashboard() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button 
-                className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-lg" 
-                onClick={handleJoin} 
+              <Button
+                className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-lg"
+                onClick={handleJoin}
                 disabled={accessCode.length < 8}
                 data-testid="button-start-exam"
               >
@@ -174,7 +204,7 @@ export default function StudentDashboard() {
                   </div>
                 ) : (
                   submissions.filter(s => s.status === "graded").map((submission) => {
-                    const totalPoints = getExamTotalPoints(submission.examId);
+                    const totalPoints = examTotalPointsMap[submission.examId] || 0;
                     return (
                       <div key={submission.id} className="flex justify-between items-center p-4 rounded-lg bg-white border border-slate-100 shadow-sm">
                         <div className="space-y-1">

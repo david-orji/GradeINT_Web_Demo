@@ -120,7 +120,7 @@ export class DatabaseStorage implements IStorage {
     // If we're closing the exam, also close associated active sessions
     if (examFields.status === "closed") {
       await db.update(examSessions)
-        .set({ status: "inactive" })
+        .set({ status: "closed" })
         .where(eq(examSessions.examId, id));
     }
 

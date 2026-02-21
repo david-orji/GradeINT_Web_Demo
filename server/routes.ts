@@ -14,10 +14,20 @@ import {
 import { batchProcess } from "./replit_integrations/batch";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+// Lazy init — avoids crash on startup when API key is absent
+let _openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error("No OpenAI API key found. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY in your .env file.");
+    _openai = new OpenAI({
+      apiKey,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    });
+  }
+  return _openai;
+}
+
 
 export async function registerRoutes(
   httpServer: Server,
@@ -63,7 +73,7 @@ export async function registerRoutes(
             Return ONLY a JSON object: { "score": number, "feedback": string }
           `;
 
-          const response = await openai.chat.completions.create({
+          const response = await getOpenAI().chat.completions.create({
             model: "gpt-4o",
             messages: [{ role: "user", content: prompt }],
             response_format: { type: "json_object" },

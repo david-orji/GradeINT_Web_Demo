@@ -32,11 +32,11 @@ export const questions = pgTable("questions", {
   text: text("text").notNull(),
   type: text("type", { enum: ["multiple_choice", "short_answer", "essay"] }).notNull(),
   // For MCQ: ["Option A", "Option B", ...]
-  options: jsonb("options").$type<string[]>(), 
+  options: jsonb("options").$type<string[]>(),
   // For auto-grading/simulation
   correctAnswer: text("correct_answer"),
   // Grading rubric/criteria for the AI simulator
-  rubric: text("rubric"), 
+  rubric: text("rubric"),
   points: integer("points").notNull().default(1),
   order: integer("order").notNull(),
 });
@@ -45,7 +45,7 @@ export const examSessions = pgTable("exam_sessions", {
   id: serial("id").primaryKey(),
   examId: integer("exam_id").notNull(),
   accessCode: text("access_code").notNull(),
-  status: text("status", { enum: ["active", "completed", "locked", "inactive"] }).notNull().default("active"),
+  status: text("status", { enum: ["active", "completed", "locked", "inactive", "closed"] }).notNull().default("active"),
   startTime: timestamp("start_time").defaultNow(),
   endTime: timestamp("end_time"),
 });

@@ -1,12 +1,13 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { 
-  LayoutDashboard, 
-  BookOpen, 
-  Users, 
-  Settings, 
+import {
+  LayoutDashboard,
+  BookOpen,
+  Users,
+  Settings,
   LogOut,
-  GraduationCap
+  GraduationCap,
+  TableProperties
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -22,6 +23,7 @@ export function Sidebar({ className }: SidebarProps) {
     { href: "/teacher", icon: LayoutDashboard, label: "Overview" },
     { href: "/teacher/exams", icon: BookOpen, label: "Exams" },
     { href: "/teacher/grading", icon: GraduationCap, label: "Grading" },
+    { href: "/teacher/scoresheet", icon: TableProperties, label: "Score sheet" },
   ];
 
   const adminLinks = [
@@ -52,8 +54,8 @@ export function Sidebar({ className }: SidebarProps) {
           return (
             <Link key={link.href} href={link.href} className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-              isActive 
-                ? "bg-blue-600 text-white shadow-sm" 
+              isActive
+                ? "bg-blue-600 text-white shadow-sm"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white"
             )}>
               <link.icon className="w-5 h-5" />
@@ -73,7 +75,7 @@ export function Sidebar({ className }: SidebarProps) {
             <p className="text-xs text-slate-400 truncate capitalize">{user?.role}</p>
           </div>
         </div>
-        <button 
+        <button
           onClick={logout}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
         >
