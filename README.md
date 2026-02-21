@@ -44,14 +44,32 @@ React Query
 Wouter (routing)
 
 Backend:
-
 Express
-
 TypeScript
-
 Drizzle ORM
-
 PostgreSQL / SQLite (depending on environment)
+
+
+```
+GradeINT/
+├── shared/               ← Types, DB schema, API route contracts (Zod)
+│   ├── schema.ts         ← Drizzle tables + Zod insert schemas + TS types
+│   ├── routes.ts         ← Typed API contract (method, path, input, responses)
+│   └── models/chat.ts    ← (Referenced but unread — likely AI chat types)
+├── server/
+│   ├── index.ts          ← Express setup, logging middleware, Vite dev proxy
+│   ├── routes.ts         ← All API route handlers + DB seed logic
+│   ├── storage.ts        ← DatabaseStorage class (all DB queries)
+│   └── db.ts             ← Drizzle client init
+└── client/src/
+    ├── App.tsx           ← Router + Protected routes
+    ├── hooks/            ← use-auth, use-exams, use-sessions, use-toast
+    └── pages/
+        ├── Login.tsx
+        ├── teacher/      ← Dashboard, ExamsList, Grading, ScoreSheet
+        └── student/      ← Dashboard, ExamSession
+```
+
 
 AI:
 OpenAI API is currently integrated for grading but will need to be swapped for Claude Sonnet
@@ -72,7 +90,7 @@ High-Level Structure
   api-contract.ts
 
 🔄 Domain Model
-Exam
+```Exam
 {
   id: number
   title: string
@@ -104,6 +122,7 @@ Multiple sessions allowed per exam.
 Submission
 One per student per session.
 unique(studentId, sessionId)
+```
 
 📌 Business Rules
   Exams must have at least one question before publishing.
