@@ -11,7 +11,6 @@ import {
   type Question,
 } from "@shared/schema";
 
-import { batchProcess } from "./replit_integrations/batch";
 import OpenAI from "openai";
 
 // Lazy init — avoids crash on startup when API key is absent
