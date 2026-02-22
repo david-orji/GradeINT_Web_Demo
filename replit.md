@@ -90,8 +90,3 @@ Preferred communication style: Simple, everyday language.
 - **Vite**: Frontend build tool with HMR
 - **esbuild**: Server bundling for production
 - **tsx**: TypeScript execution for development
-
-### Replit-Specific
-- **@replit/vite-plugin-runtime-error-modal**: Error overlay for development
-- **@replit/vite-plugin-cartographer**: Development tooling
-- **@replit/vite-plugin-dev-banner**: Development environment indicator

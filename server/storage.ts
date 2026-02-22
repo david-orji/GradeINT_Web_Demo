@@ -1,8 +1,8 @@
 import { db } from "./db";
-import { 
+import {
   users, exams, questions, examSessions, submissions,
   type User, type Exam, type Question, type ExamSession, type Submission,
-  type CreateExamRequest, type CreateQuestionRequest, type CreateSessionRequest, 
+  type CreateExamRequest, type CreateQuestionRequest, type CreateSessionRequest,
   type CreateSubmissionRequest, type UpdateSubmissionRequest
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -12,7 +12,7 @@ export interface IStorage {
   getUsers(): Promise<User[]>;
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
-  
+
   // Exams
   getExams(teacherId?: number): Promise<Exam[]>;
   getExam(id: number): Promise<Exam | undefined>;
@@ -20,16 +20,16 @@ export interface IStorage {
   updateExam(id: number, updates: Partial<CreateExamRequest>): Promise<Exam>;
   deleteExam(id: number): Promise<void>;
   publishExam(id: number): Promise<Exam>;
-  
+
   // Questions
   getQuestions(examId: number): Promise<Question[]>;
   createQuestion(question: CreateQuestionRequest): Promise<Question>;
-  
+
   // Sessions
   getSessions(examId?: number): Promise<ExamSession[]>;
   getSession(id: number): Promise<ExamSession | undefined>;
   createSession(session: CreateSessionRequest): Promise<ExamSession>;
-  
+
   // Submissions
   getSubmissionsByExam(examId: number): Promise<Submission[]>;
   getSubmissionsByStudent(studentId: number): Promise<Submission[]>;
@@ -71,13 +71,13 @@ export class DatabaseStorage implements IStorage {
     const accessCode = this.generateAccessCode();
     const [newExam] = await db.insert(exams).values({ ...examFields, accessCode }).returning();
     console.log(`Created new exam with ID: ${newExam.id}`);
-    
+
     // If questions are provided, add them
     if (questionsData && Array.isArray(questionsData) && questionsData.length > 0) {
       console.log(`Adding ${questionsData.length} questions to exam ${newExam.id}`);
       for (let i = 0; i < questionsData.length; i++) {
         const q = questionsData[i];
-        console.log(`Inserting question ${i+1} for exam ${newExam.id}: ${q.text}`);
+        console.log(`Inserting question ${i + 1} for exam ${newExam.id}: ${q.text}`);
         await db.insert(questions).values({
           examId: newExam.id,
           text: q.text,
@@ -116,11 +116,11 @@ export class DatabaseStorage implements IStorage {
 
   async updateExam(id: number, updates: Partial<CreateExamRequest>): Promise<Exam> {
     const { questions: questionsData, ...examFields } = updates as any;
-    
-    // If we're closing the exam, also close associated active sessions
+
+    // If we're closing the exam, also mark associated sessions as completed
     if (examFields.status === "closed") {
       await db.update(examSessions)
-        .set({ status: "closed" })
+        .set({ status: "completed", endTime: new Date() })
         .where(eq(examSessions.examId, id));
     }
 
@@ -128,7 +128,7 @@ export class DatabaseStorage implements IStorage {
       .set({ ...examFields, updatedAt: new Date() })
       .where(eq(exams.id, id))
       .returning();
-      
+
     if (!updated) throw new Error("Exam not found");
 
     if (questionsData && Array.isArray(questionsData) && questionsData.length > 0) {
@@ -158,14 +158,14 @@ export class DatabaseStorage implements IStorage {
 
   async publishExam(id: number): Promise<Exam> {
     const [updated] = await db.update(exams).set({ status: "published" }).where(eq(exams.id, id)).returning();
-    
+
     // Create an active session when an exam is published
     await db.insert(examSessions).values({
       examId: updated.id,
       accessCode: updated.accessCode,
       status: "active",
     });
-    
+
     return updated;
   }
 
@@ -232,7 +232,7 @@ export class DatabaseStorage implements IStorage {
     if (updates.status === "submitted") {
       updateData.submittedAt = new Date();
     }
-    
+
     const [updated] = await db.update(submissions)
       .set(updateData)
       .where(eq(submissions.id, id))

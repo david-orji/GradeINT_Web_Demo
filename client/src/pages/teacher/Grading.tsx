@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/layout/Sidebar";
-import { useExams, useSubmissionsByExam } from "@/hooks/use-exams";
+import { useExams } from "@/hooks/use-exams";
 import { CheckCircle, Clock, AlertCircle, FileText, ChevronRight, Brain, Shield, User, Check, X } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
 import { useAuth } from "@/hooks/use-auth";
@@ -30,7 +30,25 @@ export default function GradingPage() {
 
   const [selectedExamId, setSelectedExamId] = useState<number | null>(null);
   const [viewingSubmissionId, setViewingSubmissionId] = useState<number | null>(null);
-  const { data: submissions, isLoading } = useSubmissionsByExam(selectedExamId || 0);
+
+  // Helper — true if submission has any AI grade still pending
+  const hasPendingGrades = (sub: any) =>
+    sub?.grades && Object.values(sub.grades).some((g: any) => g.pending === true);
+
+  // Auto-poll every 4 s while any visible submission is still being AI-graded
+  const { data: submissions, isLoading } = useQuery<any[]>({
+    queryKey: [api.submissions.listByExam.path, selectedExamId],
+    enabled: !!selectedExamId,
+    queryFn: async () => {
+      const res = await fetch(`/api/submissions/exam/${selectedExamId}`);
+      if (!res.ok) throw new Error("Failed to fetch submissions");
+      return res.json();
+    },
+    refetchInterval: (data) => {
+      const list = data?.state?.data as any[] | undefined;
+      return list?.some(hasPendingGrades) ? 4000 : false;
+    },
+  });
 
   const { data: sessions } = useQuery<any[]>({
     queryKey: [api.sessions.list.path],
@@ -48,6 +66,30 @@ export default function GradingPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.submissions.listByExam.path, selectedExamId] });
+    }
+  });
+
+  const gradeMutation = useMutation({
+    mutationFn: async (submissionId: number) => {
+      const res = await apiRequest("POST", `/api/submissions/${submissionId}/grade`, {});
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Grading failed");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [api.submissions.listByExam.path, selectedExamId] });
+      const pending = hasPendingGrades(data);
+      toast({
+        title: pending ? "MCQ graded — AI in progress" : "Grading complete",
+        description: pending
+          ? "Multiple choice questions are done. Open-ended responses are being AI-graded in the background."
+          : "All questions have been graded successfully.",
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: "Grading failed", description: err.message, variant: "destructive" });
     }
   });
 
@@ -220,13 +262,22 @@ export default function GradingPage() {
                           </p>
                         </div>
                       </div>
+                      {viewingSubmission.status !== "graded" && (
+                        <Button
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => gradeMutation.mutate(viewingSubmission.id)}
+                          disabled={gradeMutation.isPending}
+                        >
+                          {gradeMutation.isPending ? "Grading..." : "▶ Run Grading"}
+                        </Button>
+                      )}
                       <Button
                         className="w-full bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/10"
                         onClick={() => updateSubmissionMutation.mutate({
                           id: viewingSubmission.id,
                           updates: { status: "graded" }
                         })}
-                        disabled={updateSubmissionMutation.isPending || viewingSubmission.status === "graded"}
+                        disabled={updateSubmissionMutation.isPending || viewingSubmission.status === "graded" || !viewingSubmission.grades}
                       >
                         {viewingSubmission.status === "graded" ? "Graded" : "Confirm Grading"}
                       </Button>
@@ -314,7 +365,9 @@ export default function GradingPage() {
                 ) : submissions?.length === 0 ? (
                   <div className="p-12 text-center text-slate-500">No submissions found for this exam.</div>
                 ) : (
-                  submissions?.map(submission => (
+                  submissions?.map(submission => {
+                    const isPending = hasPendingGrades(submission);
+                    return (
                     <div key={submission.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
@@ -330,14 +383,28 @@ export default function GradingPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${submission.status === "graded" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                        {/* Status badge */}
+                        {isPending ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200 animate-pulse">
+                            AI grading…
+                          </span>
+                        ) : (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                            submission.status === "graded"
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
                           }`}>
-                          {submission.status}
-                        </span>
+                            {submission.status}
+                          </span>
+                        )}
+
+                        {/* Review button — disabled while AI is still running */}
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-blue-600 hover:text-blue-700 flex items-center gap-1 group"
+                          className="text-blue-600 hover:text-blue-700 flex items-center gap-1 group disabled:opacity-40 disabled:cursor-not-allowed"
+                          disabled={isPending}
+                          title={isPending ? "Grading still in progress — please wait" : undefined}
                           onClick={() => {
                             const sub = submissions?.find(s => s.id === submission.id);
                             const session = sessions?.find(s => s.id === sub?.sessionId);
@@ -352,12 +419,40 @@ export default function GradingPage() {
                             setViewingSubmissionId(submission.id);
                           }}
                         >
-                          Review
-                          <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                          {isPending ? "Grading in progress" : "Review"}
+                          {!isPending && <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />}
                         </Button>
+
+                        {/* Grade button — only shown when neither graded nor AI-pending */}
+                        {submission.status !== "graded" && !isPending && (
+                          <Button
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3"
+                            disabled={gradeMutation.isPending && gradeMutation.variables === submission.id}
+                            onClick={() => {
+                              const sub = submissions?.find(s => s.id === submission.id);
+                              const session = sessions?.find(s => s.id === sub?.sessionId);
+                              if (session && session.status === "active") {
+                                toast({
+                                  title: "Cannot Grade",
+                                  description: "Please, close exam before grading",
+                                  variant: "destructive"
+                                });
+                                return;
+                              }
+                              gradeMutation.mutate(submission.id);
+                            }}
+                          >
+                            {gradeMutation.isPending && gradeMutation.variables === submission.id
+                              ? "Grading..."
+                              : "Grade"}
+                          </Button>
+                        )}
                       </div>
                     </div>
-                  ))
+                    );
+                  })
+
                 )}
               </div>
             </div>

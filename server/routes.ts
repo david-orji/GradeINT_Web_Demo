@@ -11,20 +11,18 @@ import {
   type Question,
 } from "@shared/schema";
 
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
+import pLimit from "p-limit";
 
 // Lazy init — avoids crash on startup when API key is absent
-let _openai: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!_openai) {
-    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("No OpenAI API key found. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY in your .env file.");
-    _openai = new OpenAI({
-      apiKey,
-      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-    });
+let _anthropic: Anthropic | null = null;
+function getAnthropic(): Anthropic {
+  if (!_anthropic) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error("No Anthropic API key found. Set ANTHROPIC_API_KEY in your .env file.");
+    _anthropic = new Anthropic({ apiKey });
   }
-  return _openai;
+  return _anthropic;
 }
 
 
@@ -34,7 +32,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   // === API ROUTES ===
 
-  // AI Grading Trigger
+  // Grading route — Phase 1: MCQs graded instantly and saved; Phase 2: AI runs in background
   app.post("/api/submissions/:id/grade", async (req, res) => {
     try {
       const submissionId = Number(req.params.id);
@@ -45,62 +43,126 @@ export async function registerRoutes(
       const session = await storage.getSession(submission.sessionId);
       if (!session) return res.status(404).json({ message: "Session not found" });
 
-      if (session.status !== "completed") {
+      if (session.status !== "completed" && session.status !== "closed") {
         return res.status(400).json({ message: "Please, close exam before grading" });
       }
 
       const exam = await storage.getExam(submission.examId);
       const questions = await storage.getQuestions(submission.examId);
 
-      const results = await batchProcess(
-        questions,
-        async (q) => {
-          const studentResponse =
-            submission.responses?.[q.id.toString()] || "No response provided.";
-
-          const prompt = `
-            You are  a strict, fair examiner grading a student's free-text response for the subject: ${exam?.subject}.
-            Question: ${q.text}
-            Rubric/Criteria: ${q.rubric || "Grade ONLY using the rubric."}
-            Student Response: "${studentResponse}"        
-            
-            Evaluate the response and provide a score from 0 to ${q.points}.
-            If the answer is nonsense or off-topic, give low score and flag it. Do not reward irrelevant content.
-            Be consistent.
-            Also provide a brief, professional feedback explaining the score. 
-            
-            Return ONLY a JSON object: { "score": number, "feedback": string }
-          `;
-
-          const response = await getOpenAI().chat.completions.create({
-            model: "gpt-4o",
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" },
-          });
-
-          return JSON.parse(response.choices[0]?.message?.content || "{}");
-        },
-        { concurrency: 2 },
-      );
-
-      const grades: Record<string, { score: number; feedback: string }> = {};
+      // ── PHASE 1: Grade all MCQs instantly, set placeholders for open-ended ──
+      type GradeEntry = { score: number; feedback: string; pending?: boolean };
+      const grades: Record<string, GradeEntry> = {};
       let totalScore = 0;
+      const openEndedQuestions: typeof questions = [];
 
-      questions.forEach((q, idx) => {
-        grades[q.id.toString()] = results[idx];
-        totalScore += results[idx].score || 0;
-      });
+      for (const q of questions) {
+        const studentResponse = (submission.responses?.[q.id.toString()] || "").trim();
 
+        if (q.type === "multiple_choice") {
+          const answer = (q.correctAnswer || q.rubric || "").trim();
+          const isCorrect =
+            answer.length > 0 &&
+            studentResponse.toLowerCase() === answer.toLowerCase();
+          const grade: GradeEntry = {
+            score: isCorrect ? q.points : 0,
+            feedback: isCorrect
+              ? `Correct! The answer is "${answer}".`
+              : studentResponse.length === 0
+                ? `No response provided. The correct answer is "${answer}".`
+                : `Incorrect. You answered "${studentResponse}". The correct answer is "${answer}".`,
+          };
+          grades[q.id.toString()] = grade;
+          totalScore += grade.score;
+        } else {
+          // Placeholder — AI will fill this in during Phase 2
+          grades[q.id.toString()] = {
+            score: 0,
+            feedback: "AI grading in progress...",
+            pending: true,
+          };
+          openEndedQuestions.push(q);
+        }
+      }
+
+      // Save MCQ results and pending placeholders immediately, then respond
       const updated = await storage.updateSubmission(submissionId, {
-        grades,
+        grades: grades as any,
         totalScore,
-        status: "submitted", // Keep as submitted until teacher confirms
+        status: "submitted",
       });
 
-      res.json(updated);
+      res.json(updated); // ← client gets result right away
+
+      // ── PHASE 2: Grade open-ended questions in the background ──────────────
+      if (openEndedQuestions.length === 0) return;
+
+      const limit = pLimit(2);
+
+      Promise.all(
+        openEndedQuestions.map((q) =>
+          limit(async () => {
+            const studentResponse = (submission.responses?.[q.id.toString()] || "").trim();
+            const responseText = studentResponse.length > 0 ? studentResponse : "No response provided.";
+
+            const prompt = `
+You are a strict, fair examiner grading a student's response for the subject: ${exam?.subject}.
+Question: ${q.text}
+Rubric/Criteria: ${q.rubric || "Use your best judgement based on the question."}
+Student Response: "${responseText}"
+
+Evaluate the response and provide a score from 0 to ${q.points}.
+If the answer is nonsense or off-topic, give a low score and flag it. Do not reward irrelevant content.
+Be consistent.
+Also provide a brief, professional feedback explaining the score.
+
+Return ONLY a JSON object: { "score": number, "feedback": string }
+            `.trim();
+
+            let result: GradeEntry;
+            try {
+              const aiResponse = await getAnthropic().messages.create({
+                model: "claude-sonnet-4-5",
+                max_tokens: 256,
+                messages: [{ role: "user", content: prompt }],
+              });
+              const rawText =
+                aiResponse.content[0]?.type === "text"
+                  ? aiResponse.content[0].text
+                  : '{"score":0,"feedback":"Grading error."}';
+              result = JSON.parse(rawText) as GradeEntry;
+            } catch (aiErr) {
+              console.error(`AI grading failed for question ${q.id}:`, aiErr);
+              result = {
+                score: 0,
+                feedback: "AI grading failed — please review and score this response manually.",
+              };
+            }
+
+            // Merge this result into the live DB record (fetch-merge-save)
+            const current = await storage.getSubmission(submissionId);
+            if (!current) return;
+            const mergedGrades: Record<string, GradeEntry> = {
+              ...(current.grades as any),
+              [q.id.toString()]: result,
+            };
+            const newTotal = Object.values(mergedGrades).reduce(
+              (sum, g) => sum + ((g as any).pending ? 0 : g.score || 0),
+              0
+            );
+            await storage.updateSubmission(submissionId, {
+              grades: mergedGrades as any,
+              totalScore: newTotal,
+            });
+          })
+        )
+      ).catch((err) => console.error("Background AI grading error:", err));
+
     } catch (err) {
-      console.error("AI Grading Error:", err);
-      res.status(500).json({ message: "AI Grading failed" });
+      console.error("Grading Error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Grading failed" });
+      }
     }
   });
 

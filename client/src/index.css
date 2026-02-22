@@ -9,20 +9,21 @@
   /* Neutral Slate/Gray for professional look */
   --background: 210 20% 98%;
   --foreground: 222 47% 11%;
-  
+
   /* Trustworthy Corporate Blue */
   --primary: 221 83% 53%;
-  --primary-foreground: 210 40% 98%;
-  
+  --primary-foreground: 221 40% 98%;
+
   --secondary: 210 40% 96.1%;
   --secondary-foreground: 222 47% 11.2%;
-  
+
   --muted: 210 40% 96.1%;
   --muted-foreground: 215 16.3% 46.9%;
-  
+
+  /*the side bar main color*/
   --accent: 210 40% 96.1%;
-  --accent-foreground: 222 47% 11.2%;
-  
+  --accent-foreground: 222 48% 82%;
+
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 210 40% 98%;
 
@@ -30,7 +31,8 @@
   --input: 214.3 31.8% 91.4%;
   --ring: 221 83% 53%;
 
-  --radius: 0.375rem; /* rounded-md */
+  --radius: 0.375rem;
+  /* rounded-md */
 
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-display: 'Segoe UI', 'Inter', system-ui, sans-serif;
@@ -39,10 +41,16 @@
 @layer base {
   body {
     @apply bg-background text-foreground antialiased font-sans;
-    background-color: hsl(var(--background)); /* Explicit for some browsers */
+    background-color: hsl(var(--background));
+    /* Explicit for some browsers */
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-display);
     @apply font-semibold tracking-tight;
   }
@@ -53,10 +61,11 @@
   .card-shadow {
     box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   }
-  
+
   .card-hover {
     @apply transition-all duration-200 ease-out;
   }
+
   .card-hover:hover {
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     transform: translateY(-1px);
