@@ -203,27 +203,30 @@ export default function StudentDashboard() {
                     <p className="text-sm">No graded exams found yet.</p>
                   </div>
                 ) : (
-                  submissions.filter(s => s.status === "graded").map((submission) => {
-                    const totalPoints = examTotalPointsMap[submission.examId] || 0;
-                    return (
-                      <div key={submission.id} className="flex justify-between items-center p-4 rounded-lg bg-white border border-slate-100 shadow-sm">
-                        <div className="space-y-1">
-                          <h4 className="font-semibold text-slate-900 leading-none">{getExamTitle(submission.examId)}</h4>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-100 uppercase text-[10px] font-bold tracking-wider">Graded</Badge>
+                  submissions
+                    .filter(s => s.status === "graded")
+                    .sort((a, b) => new Date(b.submittedAt ?? 0).getTime() - new Date(a.submittedAt ?? 0).getTime())
+                    .map((submission) => {
+                      const totalPoints = examTotalPointsMap[submission.examId] || 0;
+                      return (
+                        <div key={submission.id} className="flex justify-between items-center p-4 rounded-lg bg-white border border-slate-100 shadow-sm">
+                          <div className="space-y-1">
+                            <h4 className="font-semibold text-slate-900 leading-none">{getExamTitle(submission.examId)}</h4>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-100 uppercase text-[10px] font-bold tracking-wider">Graded</Badge>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xl font-bold text-slate-900">
+                              {submission.totalScore}
+                              <span className="text-xs text-slate-400 font-normal ml-0.5">
+                                / {totalPoints || "--"}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-xl font-bold text-slate-900">
-                            {submission.totalScore}
-                            <span className="text-xs text-slate-400 font-normal ml-0.5">
-                              / {totalPoints || "--"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })
                 )}
               </div>
             </CardContent>
