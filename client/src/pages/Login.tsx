@@ -38,7 +38,7 @@ export default function Login() {
           <ShieldCheck className="w-7 h-7 text-white" />
         </div>
         <h1 className="text-3xl font-display font-bold text-slate-900">GradeINT</h1>
-        <p className="text-slate-500 mt-2">Enterprise Examination Platform</p>
+        <p className="text-slate-500 mt-2">Institutional Assessment Infrastructure</p>
       </div>
 
       <Card className="w-full max-w-md shadow-xl border-slate-200">
@@ -71,8 +71,8 @@ export default function Login() {
           </div>
         </CardContent>
         <CardFooter>
-          <Button 
-            className="w-full h-11 text-base bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/10" 
+          <Button
+            className="w-full h-11 text-base bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/10"
             onClick={handleLogin}
             disabled={!selectedUserId}
           >
@@ -80,9 +80,9 @@ export default function Login() {
           </Button>
         </CardFooter>
       </Card>
-      
+
       <p className="mt-8 text-xs text-slate-400 text-center max-w-xs">
-        &copy; 2024 GradeINT Inc. secure examination environment.
+        &copy; 2026 GradeINT - Reliable Assessment Environment.
       </p>
     </div>
   );

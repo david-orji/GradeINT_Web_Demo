@@ -339,7 +339,7 @@ export default function ExamsList() {
                             <Label>Grading Rubric / Key</Label>
                             <Textarea 
                               {...form.register(`questions.${index}.rubric` as const)}
-                              placeholder="Describe ideal answer or criteria for AI grading..."
+                              placeholder="State answer or describe criteria for AI grading..."
                               className="h-20"
                             />
                           </div>

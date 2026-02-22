@@ -238,7 +238,6 @@ export default function StudentDashboard() {
         </div>
 
         <div className="mt-12 text-center text-slate-400 text-sm">
-          <p>Please ensure you have a stable internet connection before starting.</p>
           <p>Exams are monitored for integrity purposes.</p>
         </div>
       </main>

@@ -214,7 +214,7 @@ export default function ScoreSheet() {
         <div className="px-8 py-6 border-b border-slate-200 bg-white flex-shrink-0">
           <h1 className="text-2xl font-display font-bold text-slate-900">Score Sheet</h1>
           <p className="text-slate-500 mt-1 text-sm">
-            View student scores for every closed exam. Export as Excel or CSV.
+            View students` performance for closed and graded exams.
           </p>
         </div>
 
@@ -225,7 +225,7 @@ export default function ScoreSheet() {
           <div className="overflow-y-auto bg-white flex flex-col">
             <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/70 sticky top-0 z-10">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Closed Exams ({closedExams.length})
+                Graded Exams ({closedExams.length})
               </p>
             </div>
 
@@ -234,9 +234,9 @@ export default function ScoreSheet() {
                 <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mb-3">
                   <BookOpen className="w-6 h-6 text-slate-400" />
                 </div>
-                <p className="text-sm font-medium text-slate-700">No closed exams yet</p>
+                <p className="text-sm font-medium text-slate-700">No graded exams yet</p>
                 <p className="text-xs text-slate-500 mt-1">
-                  Close a published exam to see its score sheet here.
+                  Close and grade an exam to see its score sheet here.
                 </p>
               </div>
             ) : (
@@ -295,7 +295,7 @@ export default function ScoreSheet() {
                 <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mb-4">
                   <Trophy className="w-9 h-9 text-slate-300" />
                 </div>
-                <h3 className="text-base font-semibold text-slate-600">Select a closed exam</h3>
+                <h3 className="text-base font-semibold text-slate-600">Select a graded exam</h3>
                 <p className="text-sm text-slate-400 mt-1 max-w-xs">
                   Choose an exam from the left panel to view its full student score sheet.
                 </p>

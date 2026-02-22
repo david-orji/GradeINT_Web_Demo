@@ -33,21 +33,17 @@ GradeINT enables institutions to run secure digital assessments while supporting
 
 🏗 Architecture Overview
 Tech Stack
-Frontend:
+  Frontend:
+    React
+    TypeScript
+    React Query
+    Wouter (routing)
 
-React
-
-TypeScript
-
-React Query
-
-Wouter (routing)
-
-Backend:
-Express
-TypeScript
-Drizzle ORM
-PostgreSQL / SQLite (depending on environment)
+  Backend:
+    Express
+    TypeScript
+    Drizzle ORM
+    PostgreSQL / SQLite (depending on environment)
 
 
 ```

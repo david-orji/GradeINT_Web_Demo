@@ -168,7 +168,7 @@ export default function GradingPage() {
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-slate-600 leading-relaxed">
-                      Our explainable AI model has analyzed this submission against your rubric.
+                      This submission has been analysed against your rubric.
                       You can manually override any individual grade using the toggle buttons below.
                     </p>
                   </CardContent>
@@ -299,7 +299,7 @@ export default function GradingPage() {
         <div className="max-w-7xl mx-auto px-8 py-8">
           <header className="mb-8">
             <h1 className="text-2xl font-display font-bold text-slate-900">Grading & Results</h1>
-            <p className="text-slate-500 mt-1">Review and validate student submissions.</p>
+            <p className="text-slate-500 mt-1">Review and validate students` submissions.</p>
           </header>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -411,7 +411,7 @@ export default function GradingPage() {
                             if (session && session.status === "active") {
                               toast({
                                 title: "Cannot Grade",
-                                description: "Please, close exam before grading",
+                                description: "Please, close this exam before grading",
                                 variant: "destructive"
                               });
                               return;
