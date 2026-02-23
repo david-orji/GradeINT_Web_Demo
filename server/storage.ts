@@ -68,8 +68,10 @@ export class DatabaseStorage implements IStorage {
 
   async createExam(exam: CreateExamRequest): Promise<Exam> {
     const { questions: questionsData, ...examFields } = exam as any;
-    const accessCode = this.generateAccessCode();
-    const [newExam] = await db.insert(exams).values({ ...examFields, accessCode }).returning();
+    // Access code is generated only when the exam is published.
+    // Use a unique draft placeholder to satisfy the NOT NULL + UNIQUE DB constraint.
+    const draftPlaceholder = `DRAFT-${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
+    const [newExam] = await db.insert(exams).values({ ...examFields, accessCode: draftPlaceholder }).returning();
     console.log(`Created new exam with ID: ${newExam.id}`);
 
     // If questions are provided, add them
@@ -90,9 +92,12 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Auto-create a session for the published exam to make it immediately testable
+    // Auto-create session only for exams seeded as already-published (e.g. seed data)
     if (examFields.status === "published") {
-      // Check if questions were actually added before creating session
+      const accessCode = this.generateAccessCode();
+      await db.update(exams).set({ accessCode }).where(eq(exams.id, newExam.id));
+      newExam.accessCode = accessCode;
+
       const [qCount] = await db.select({ count: sql<number>`count(*)` }).from(questions).where(eq(questions.examId, newExam.id));
       if (Number(qCount.count) > 0) {
         await db.insert(examSessions).values({
@@ -157,12 +162,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async publishExam(id: number): Promise<Exam> {
-    const [updated] = await db.update(exams).set({ status: "published" }).where(eq(exams.id, id)).returning();
+    // Generate the access code only now, at publish time
+    const accessCode = this.generateAccessCode();
 
-    // Create an active session when an exam is published
+    const [updated] = await db.update(exams)
+      .set({ status: "published", accessCode })
+      .where(eq(exams.id, id))
+      .returning();
+
+    // Create an active session with the freshly generated access code
     await db.insert(examSessions).values({
       examId: updated.id,
-      accessCode: updated.accessCode,
+      accessCode: accessCode,
       status: "active",
     });
 

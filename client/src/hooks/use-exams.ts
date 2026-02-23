@@ -12,7 +12,7 @@ export function useExams(teacherId?: number) {
       if (!res.ok) throw new Error("Failed to fetch exams");
       const allExams = await res.json();
       const parsed = api.exams.list.responses[200].parse(allExams);
-      
+
       // Client-side filter for prototype since backend is simple
       if (teacherId) {
         return parsed.filter(e => e.teacherId === teacherId);
@@ -177,8 +177,11 @@ export function useCreateSubmission() {
       if (!res.ok) throw new Error("Failed to submit exam");
       return api.submissions.create.responses[201].parse(await res.json());
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Invalidate teacher-side submissions list
       queryClient.invalidateQueries({ queryKey: [api.submissions.listByExam.path] });
+      // Also invalidate the student dashboard's own submissions query so it refreshes immediately
+      queryClient.invalidateQueries({ queryKey: ["/api/submissions/student"] });
       toast({ title: "Exam Submitted", description: "Your responses have been sealed and uploaded." });
     },
   });

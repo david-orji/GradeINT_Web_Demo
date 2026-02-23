@@ -6,16 +6,16 @@ import { Plus, MoreHorizontal, Search, FileText, Pencil, Trash2, Copy, Check } f
 import { useExams, useCreateExam, usePublishExam, useUpdateExam, useDeleteExam, useExamQuestions } from "@/hooks/use-exams";
 import { api, buildUrl } from "@shared/routes";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogTrigger,
   DialogFooter,
   DialogDescription
 } from "@/components/ui/dialog";
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -44,6 +44,25 @@ const createSchema = z.object({
     correctAnswer: z.string().optional(),
     rubric: z.string().optional(),
   })).min(1, "At least one question is required")
+}).superRefine((data, ctx) => {
+  data.questions.forEach((q, i) => {
+    if (q.type === "multiple_choice") {
+      if (!q.options || q.options.filter(o => o.trim() !== "").length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Multiple choice questions require at least 2 options",
+          path: ["questions", i, "options"],
+        });
+      }
+      if (!q.rubric || q.rubric.trim() === "") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A grading rubric / correct answer is required for MCQ",
+          path: ["questions", i, "rubric"],
+        });
+      }
+    }
+  });
 });
 
 type CreateForm = z.infer<typeof createSchema>;
@@ -66,14 +85,14 @@ export default function ExamsList() {
 
   const filteredExams = useMemo(() => {
     if (!exams) return [];
-    
+
     let result = Array.isArray(exams) ? [...exams] : [];
 
     // Search
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(e => 
-        (e.title?.toLowerCase().includes(q) || false) || 
+      result = result.filter(e =>
+        (e.title?.toLowerCase().includes(q) || false) ||
         (e.subject?.toLowerCase().includes(q) || false) ||
         (e.accessCode?.toLowerCase().includes(q) || false)
       );
@@ -121,14 +140,14 @@ export default function ExamsList() {
       return;
     }
     setEditingExam(exam);
-    
+
     // Fetch questions for this exam
     try {
       const url = buildUrl(api.questions.list.path, { examId: exam.id });
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch questions");
       const questions = await res.json();
-      
+
       form.reset({
         title: exam.title,
         subject: exam.subject,
@@ -152,7 +171,7 @@ export default function ExamsList() {
         questions: [{ text: "", type: "short_answer", points: 1 }]
       });
     }
-    
+
     setIsOpen(true);
   };
 
@@ -166,13 +185,13 @@ export default function ExamsList() {
   const onSubmit = (data: CreateForm) => {
     if (!user) return;
     const { questions: questionsData, ...examData } = data;
-    
+
     // Explicitly validate that at least one question exists before submitting
     if (!questionsData || questionsData.length === 0) {
-      toast({ 
-        title: "Validation Error", 
-        description: "Please add at least one question to the exam.", 
-        variant: "destructive" 
+      toast({
+        title: "Validation Error",
+        description: "Please add at least one question to the exam.",
+        variant: "destructive"
       });
       return;
     }
@@ -212,7 +231,7 @@ export default function ExamsList() {
   return (
     <div className="flex h-screen bg-slate-50">
       <Sidebar />
-      
+
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-8 py-8">
           <div className="flex justify-between items-center mb-8">
@@ -220,7 +239,7 @@ export default function ExamsList() {
               <h1 className="text-2xl font-display font-bold text-slate-900">Exams Library</h1>
               <p className="text-slate-500 mt-1">Manage your assessments and question banks.</p>
             </div>
-            
+
             <Dialog open={isOpen} onOpenChange={(open) => {
               setIsOpen(open);
               if (!open) {
@@ -253,17 +272,17 @@ export default function ExamsList() {
                       <Input id="subject" {...form.register("subject")} />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="description">Instructions for Students</Label>
-                    <Textarea 
-                      id="description" 
-                      {...form.register("description")} 
+                    <Textarea
+                      id="description"
+                      {...form.register("description")}
                       placeholder="Enter instructions that students will see before and during the exam..."
                       className="min-h-[100px]"
                     />
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="duration">Duration (mins)</Label>
@@ -274,9 +293,9 @@ export default function ExamsList() {
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
                       <Label className="text-base font-semibold">Questions</Label>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
+                      <Button
+                        type="button"
+                        variant="outline"
                         size="sm"
                         onClick={() => append({ text: "", type: "short_answer", points: 1 })}
                       >
@@ -288,7 +307,7 @@ export default function ExamsList() {
                     <div className="space-y-4">
                       {fields.map((field, index) => (
                         <div key={field.id} className="p-4 border border-slate-200 rounded-lg space-y-4 relative bg-slate-50/50">
-                          <Button 
+                          <Button
                             type="button"
                             variant="ghost"
                             size="icon"
@@ -306,7 +325,7 @@ export default function ExamsList() {
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <Label>Type</Label>
-                              <select 
+                              <select
                                 {...form.register(`questions.${index}.type` as const)}
                                 className="w-full h-10 px-3 rounded-md border border-input bg-background"
                               >
@@ -323,47 +342,60 @@ export default function ExamsList() {
 
                           {form.watch(`questions.${index}.type`) === "multiple_choice" && (
                             <div className="space-y-2">
-                              <Label>Options (comma separated)</Label>
-                              <Input 
+                              <Label>
+                                Options (comma separated) <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
                                 placeholder="Option A, Option B, Option C"
                                 defaultValue={form.getValues(`questions.${index}.options`)?.join(", ")}
                                 onChange={(e) => {
                                   const options = e.target.value.split(",").map(s => s.trim()).filter(s => s !== "");
-                                  form.setValue(`questions.${index}.options`, options);
+                                  form.setValue(`questions.${index}.options`, options, { shouldValidate: true });
                                 }}
                               />
+                              {form.formState.errors.questions?.[index]?.options && (
+                                <p className="text-xs text-red-500">{form.formState.errors.questions[index]?.options?.message as string}</p>
+                              )}
                             </div>
                           )}
 
                           <div className="space-y-2">
-                            <Label>Grading Rubric / Key</Label>
-                            <Textarea 
+                            <Label>
+                              Grading Rubric / Key
+                              {form.watch(`questions.${index}.type`) === "multiple_choice" && (
+                                <span className="text-red-500 ml-1">*</span>
+                              )}
+                            </Label>
+                            <Textarea
                               {...form.register(`questions.${index}.rubric` as const)}
                               placeholder="State answer or describe criteria for AI grading..."
                               className="h-20"
                             />
+                            {form.formState.errors.questions?.[index]?.rubric && (
+                              <p className="text-xs text-red-500">{form.formState.errors.questions[index]?.rubric?.message as string}</p>
+                            )}
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                      <DialogFooter className="flex items-center justify-between gap-4">
-                        <div className="flex-1 text-sm text-slate-500">
-                          {fields.length === 0 && (
-                            <span className="text-amber-600 font-medium">Add at least one question to publish this exam later.</span>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <Button type="button" variant="outline" onClick={() => {
-                            setIsOpen(false);
-                            setEditingExam(null);
-                          }}>Cancel</Button>
-                          <Button type="submit" disabled={createExam.isPending || updateExam.isPending}>
-                            {createExam.isPending || updateExam.isPending ? "Saving..." : "Save Exam"}
-                          </Button>
-                        </div>
-                      </DialogFooter>
+                  <DialogFooter className="flex items-center justify-between gap-4">
+                    <div className="flex-1 text-sm text-slate-500">
+                      {fields.length === 0 && (
+                        <span className="text-amber-600 font-medium">Add at least one question to publish this exam later.</span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" onClick={() => {
+                        setIsOpen(false);
+                        setEditingExam(null);
+                      }}>Cancel</Button>
+                      <Button type="submit" disabled={createExam.isPending || updateExam.isPending}>
+                        {createExam.isPending || updateExam.isPending ? "Saving..." : "Save Exam"}
+                      </Button>
+                    </div>
+                  </DialogFooter>
                 </form>
               </DialogContent>
             </Dialog>
@@ -374,15 +406,15 @@ export default function ExamsList() {
             <div className="p-4 border-b border-slate-200 flex items-center gap-4 bg-slate-50/50">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input 
-                  className="pl-9 bg-white" 
-                  placeholder="Search exams..." 
+                <Input
+                  className="pl-9 bg-white"
+                  placeholder="Search exams..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
               <div className="ml-auto flex gap-2">
-                <select 
+                <select
                   className="h-9 px-3 rounded-md border border-input bg-background text-sm"
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
@@ -392,7 +424,7 @@ export default function ExamsList() {
                   <option value="published">Published</option>
                   <option value="closed">Closed</option>
                 </select>
-                <select 
+                <select
                   className="h-9 px-3 rounded-md border border-input bg-background text-sm"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
@@ -427,8 +459,8 @@ export default function ExamsList() {
                 </div>
               ) : (
                 filteredExams?.map((exam) => (
-                  <div 
-                    key={exam.id} 
+                  <div
+                    key={exam.id}
                     className="grid grid-cols-12 px-6 py-4 items-center hover:bg-slate-50 transition-colors group cursor-pointer"
                     onDoubleClick={() => handleEdit(exam)}
                   >
@@ -436,70 +468,76 @@ export default function ExamsList() {
                       <div className="font-medium text-slate-900">{exam.title}</div>
                       <div className="text-xs text-slate-500 truncate mt-0.5">
                         {exam.status === "published" ? `Published ${exam.updatedAt ? format(new Date(exam.updatedAt), "MMM. do, yyyy") : "recently"}` :
-                         exam.status === "closed" ? `Closed ${exam.updatedAt ? formatDistanceToNow(new Date(exam.updatedAt), { addSuffix: true }) : "recently"}` :
-                         exam.status === "draft" ? `Draft created ${exam.createdAt ? formatDistanceToNow(new Date(exam.createdAt), { addSuffix: true }) : "recently"}` :
-                         "Active now"}
+                          exam.status === "closed" ? `Closed ${exam.updatedAt ? formatDistanceToNow(new Date(exam.updatedAt), { addSuffix: true }) : "recently"}` :
+                            exam.status === "draft" ? `Draft created ${exam.createdAt ? formatDistanceToNow(new Date(exam.createdAt), { addSuffix: true }) : "recently"}` :
+                              "Active now"}
                       </div>
                     </div>
                     <div className="col-span-2 text-sm text-slate-600">
                       {exam.subject}
                     </div>
                     <div className="col-span-2 flex items-center gap-2">
-                      <span className="font-mono text-sm font-bold text-blue-600">{exam.accessCode}</span>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-6 w-6 text-slate-400 hover:text-blue-600"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(exam.accessCode);
-                        }}
-                      >
-                        {copiedCode === exam.accessCode ? (
-                          <Check className="w-3 h-3 text-green-600" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                      </Button>
+                      {exam.status === "draft" ? (
+                        <span className="text-sm text-slate-400 italic">—</span>
+                      ) : (
+                        <>
+                          <span className="font-mono text-sm font-bold text-blue-600">{exam.accessCode}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-slate-400 hover:text-blue-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              copyToClipboard(exam.accessCode);
+                            }}
+                          >
+                            {copiedCode === exam.accessCode ? (
+                              <Check className="w-3 h-3 text-green-600" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </Button>
+                        </>
+                      )}
                     </div>
+
                     <div className="col-span-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
-                        exam.status === "published" ? "bg-green-50 text-green-700 border-green-200" :
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${exam.status === "published" ? "bg-green-50 text-green-700 border-green-200" :
                         exam.status === "closed" ? "bg-slate-100 text-slate-400 border-slate-200" :
-                        exam.status === "draft" ? "bg-blue-50 text-blue-600 border-blue-100" :
-                        "bg-amber-50 text-amber-700 border-amber-200"
-                      }`}>
+                          exam.status === "draft" ? "bg-blue-50 text-blue-600 border-blue-100" :
+                            "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}>
                         {exam.status}
                       </span>
                     </div>
                     <div className="col-span-2 text-right flex justify-end gap-2">
-                          {exam.status === "draft" && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-8 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                publishMutation.mutate(exam.id, {
-                                  onError: (error: any) => {
-                                    toast({ 
-                                      title: "Publishing Failed", 
-                                      description: error.message || "Ensure you have at least one question.", 
-                                      variant: "destructive" 
-                                    });
-                                  }
+                      {exam.status === "draft" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            publishMutation.mutate(exam.id, {
+                              onError: (error: any) => {
+                                toast({
+                                  title: "Publishing Failed",
+                                  description: error.message || "Ensure you have at least one question.",
+                                  variant: "destructive"
                                 });
-                              }}
-                              disabled={publishMutation.isPending}
-                            >
-                              Publish
-                            </Button>
-                          )}
+                              }
+                            });
+                          }}
+                          disabled={publishMutation.isPending}
+                        >
+                          Publish
+                        </Button>
+                      )}
 
                       {exam.status === "published" && (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="h-8 text-xs bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -510,12 +548,12 @@ export default function ExamsList() {
                           Close Exam
                         </Button>
                       )}
-                      
+
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-8 w-8 text-slate-400 hover:text-blue-600"
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -527,7 +565,7 @@ export default function ExamsList() {
                             <Pencil className="w-4 h-4 mr-2" />
                             Edit
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
+                          <DropdownMenuItem
                             className="text-red-600 focus:text-red-600"
                             onClick={() => {
                               deleteExam.mutate(exam.id);

@@ -68,9 +68,10 @@ GradeINT/
 
 
 AI:
-OpenAI API is currently integrated for grading but will need to be swapped for Claude Sonnet
+Claude API is currently integrated for grading
 
 High-Level Structure
+```
 /client
   /src
     /hooks
@@ -84,9 +85,11 @@ High-Level Structure
 /shared
   schema.ts
   api-contract.ts
+```
 
 🔄 Domain Model
-```Exam
+```
+Exam
 {
   id: number
   title: string
@@ -104,24 +107,28 @@ Question
   options?: string[]
   points: number
 }
+```
 
 Session
 Multiple sessions allowed per exam.
-
+```
 {
   id: number
   examId: number
   accessCode: string
   isActive: boolean
 }
+```
 
 Submission
 One per student per session.
-unique(studentId, sessionId)
+```
+  unique(studentId, sessionId)
 ```
 
 📌 Business Rules
   Exams must have at least one question before publishing.
+  MCQs must have options and answer attached before creation.
   Published exams cannot be edited.
   Sessions can only be created for published exams.
   Students can submit only once per session.
@@ -130,7 +137,7 @@ unique(studentId, sessionId)
 🧠 AI Grading Flow
   Student submits responses.
   Submission stored with status "submitted".
-  Grading endpoint calls OpenAI.
+  Grading endpoint calls Claude.
   AI returns structured evaluation.
   Submission updated with:
     score
@@ -153,40 +160,40 @@ unique(studentId, sessionId)
   npm run dev
   
   Environment Variables
-
-Create .env:
-
-DATABASE_URL=...
-OPENAI_API_KEY=...
-
+    Create .env:
+    ```
+      DATABASE_URL=...
+      OPENAI_API_KEY=...
+    ```
 📡 API Summary
 Exams
+```
+  POST /api/exams
 
-POST /api/exams
+  PUT /api/exams/:id
 
-PUT /api/exams/:id
+  POST /api/exams/:id/publish
 
-POST /api/exams/:id/publish
-
-DELETE /api/exams/:id
-
+  DELETE /api/exams/:id
+```
 Questions
+```
+  GET /api/exams/:examId/questions
 
-GET /api/exams/:examId/questions
-
-POST /api/exams/:examId/questions
-
+  POST /api/exams/:examId/questions
+```
 Sessions
+```
+  POST /api/sessions
 
-POST /api/sessions
-
-GET /api/sessions/:id
-
+  GET /api/sessions/:id
+```
 Submissions
+```
+  POST /api/submissions
 
-POST /api/submissions
-
-POST /api/submissions/:id/grade
+  POST /api/submissions/:id/grade
+```
 
 ⚠ Known Limitations
   AI grading is synchronous (blocks request lifecycle).

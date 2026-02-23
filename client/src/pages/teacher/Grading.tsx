@@ -169,7 +169,9 @@ export default function GradingPage() {
                   <CardContent>
                     <p className="text-sm text-slate-600 leading-relaxed">
                       This submission has been analysed against your rubric.
-                      You can manually override any individual grade using the toggle buttons below.
+                      {viewingSubmission.status !== "graded"
+                        ? " You can manually override any individual grade using the toggle buttons below."
+                        : " Grading has been finalised. Manual overrides are locked."}
                     </p>
                   </CardContent>
                 </Card>
@@ -206,6 +208,8 @@ export default function GradingPage() {
                                   size="sm"
                                   variant={isPassed ? "default" : "outline"}
                                   className={isPassed ? "bg-green-600 hover:bg-green-700 text-white" : "text-red-600 border-red-200 hover:bg-red-50"}
+                                  disabled={viewingSubmission.status === "graded"}
+                                  title={viewingSubmission.status === "graded" ? "Grading is finalised — overrides are locked" : undefined}
                                   onClick={() => handleToggleGrade(qId, grade?.score || 0, q.points || 1)}
                                 >
                                   {isPassed ? <Check className="w-4 h-4 mr-1" /> : <X className="w-4 h-4 mr-1" />}
@@ -368,88 +372,87 @@ export default function GradingPage() {
                   submissions?.map(submission => {
                     const isPending = hasPendingGrades(submission);
                     return (
-                    <div key={submission.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-                          <User className="w-4 h-4 text-slate-400" />
+                      <div key={submission.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                            <User className="w-4 h-4 text-slate-400" />
+                          </div>
+                          <div>
+                            <h4 className="font-medium text-slate-900">
+                              {userMap.get(submission.studentId) || `Student #${submission.studentId}`}
+                            </h4>
+                            <p className="text-xs text-slate-500">
+                              Submitted {submission.submittedAt ? formatSubmissionTime(submission.submittedAt) : "N/A"}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="font-medium text-slate-900">
-                            {userMap.get(submission.studentId) || `Student #${submission.studentId}`}
-                          </h4>
-                          <p className="text-xs text-slate-500">
-                            Submitted {submission.submittedAt ? formatSubmissionTime(submission.submittedAt) : "N/A"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        {/* Status badge */}
-                        {isPending ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200 animate-pulse">
-                            AI grading…
-                          </span>
-                        ) : (
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                            submission.status === "graded"
-                              ? "bg-green-50 text-green-700 border-green-200"
-                              : "bg-amber-50 text-amber-700 border-amber-200"
-                          }`}>
-                            {submission.status}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-4">
+                          {/* Status badge */}
+                          {isPending ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200 animate-pulse">
+                              AI grading…
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${submission.status === "graded"
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                              }`}>
+                              {submission.status}
+                            </span>
+                          )}
 
-                        {/* Review button — disabled while AI is still running */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-blue-600 hover:text-blue-700 flex items-center gap-1 group disabled:opacity-40 disabled:cursor-not-allowed"
-                          disabled={isPending}
-                          title={isPending ? "Grading still in progress — please wait" : undefined}
-                          onClick={() => {
-                            const sub = submissions?.find(s => s.id === submission.id);
-                            const session = sessions?.find(s => s.id === sub?.sessionId);
-                            if (session && session.status === "active") {
-                              toast({
-                                title: "Cannot Grade",
-                                description: "Please, close this exam before grading",
-                                variant: "destructive"
-                              });
-                              return;
-                            }
-                            setViewingSubmissionId(submission.id);
-                          }}
-                        >
-                          {isPending ? "Grading in progress" : "Review"}
-                          {!isPending && <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />}
-                        </Button>
-
-                        {/* Grade button — only shown when neither graded nor AI-pending */}
-                        {submission.status !== "graded" && !isPending && (
+                          {/* Review button — disabled while AI is still running */}
                           <Button
+                            variant="ghost"
                             size="sm"
-                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3"
-                            disabled={gradeMutation.isPending && gradeMutation.variables === submission.id}
+                            className="text-blue-600 hover:text-blue-700 flex items-center gap-1 group disabled:opacity-40 disabled:cursor-not-allowed"
+                            disabled={isPending}
+                            title={isPending ? "Grading still in progress — please wait" : undefined}
                             onClick={() => {
                               const sub = submissions?.find(s => s.id === submission.id);
                               const session = sessions?.find(s => s.id === sub?.sessionId);
                               if (session && session.status === "active") {
                                 toast({
                                   title: "Cannot Grade",
-                                  description: "Please, close exam before grading",
+                                  description: "Please, close this exam before grading",
                                   variant: "destructive"
                                 });
                                 return;
                               }
-                              gradeMutation.mutate(submission.id);
+                              setViewingSubmissionId(submission.id);
                             }}
                           >
-                            {gradeMutation.isPending && gradeMutation.variables === submission.id
-                              ? "Grading..."
-                              : "Grade"}
+                            {isPending ? "Grading in progress" : "Review"}
+                            {!isPending && <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />}
                           </Button>
-                        )}
+
+                          {/* Grade button — only shown when neither graded nor AI-pending */}
+                          {submission.status !== "graded" && !isPending && (
+                            <Button
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3"
+                              disabled={gradeMutation.isPending && gradeMutation.variables === submission.id}
+                              onClick={() => {
+                                const sub = submissions?.find(s => s.id === submission.id);
+                                const session = sessions?.find(s => s.id === sub?.sessionId);
+                                if (session && session.status === "active") {
+                                  toast({
+                                    title: "Cannot Grade",
+                                    description: "Please, close exam before grading",
+                                    variant: "destructive"
+                                  });
+                                  return;
+                                }
+                                gradeMutation.mutate(submission.id);
+                              }}
+                            >
+                              {gradeMutation.isPending && gradeMutation.variables === submission.id
+                                ? "Grading..."
+                                : "Grade"}
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
                     );
                   })
 
