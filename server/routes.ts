@@ -166,6 +166,167 @@ Return ONLY a JSON object: { "score": number, "feedback": string }
     }
   });
 
+  // Exam-level batch grading — grades ALL ungraded submissions for an exam at once
+  // MCQs: instant in-process. Open-ended: one Claude call per question, all students in one prompt.
+  app.post("/api/exams/:id/grade-all", async (req, res) => {
+    try {
+      const examId = Number(req.params.id);
+      const exam = await storage.getExam(examId);
+      if (!exam) return res.status(404).json({ message: "Exam not found" });
+
+      const questions = await storage.getQuestions(examId);
+      if (questions.length === 0)
+        return res.status(400).json({ message: "Exam has no questions" });
+
+      // Only grade submissions that are not already graded
+      const allSubmissions = await storage.getSubmissionsByExam(examId);
+      const toGrade = allSubmissions.filter(s => s.status !== "graded");
+
+      if (toGrade.length === 0)
+        return res.status(200).json({ message: "All submissions already graded", queued: 0 });
+
+      type GradeEntry = { score: number; feedback: string; pending?: boolean };
+
+      // ── PHASE 1: Grade all MCQs instantly for every submission ──────────────
+      const mcqQuestions = questions.filter(q => q.type === "multiple_choice");
+      const openQuestions = questions.filter(q => q.type !== "multiple_choice");
+
+      // Initialise each submission's grade map with MCQ results + pending placeholders
+      const submissionGrades = new Map<number, Record<string, GradeEntry>>();
+      const submissionMCQTotals = new Map<number, number>();
+
+      for (const sub of toGrade) {
+        const grades: Record<string, GradeEntry> = {};
+        let mcqTotal = 0;
+
+        for (const q of mcqQuestions) {
+          const studentResponse = ((sub.responses as any)?.[q.id.toString()] || "").trim();
+          const answer = (q.correctAnswer || q.rubric || "").trim();
+          const isCorrect = answer.length > 0 && studentResponse.toLowerCase() === answer.toLowerCase();
+          grades[q.id.toString()] = {
+            score: isCorrect ? q.points : 0,
+            feedback: isCorrect
+              ? `Correct! The answer is "${answer}".`
+              : studentResponse.length === 0
+                ? `No response provided. The correct answer is "${answer}".`
+                : `Incorrect. You answered "${studentResponse}". The correct answer is "${answer}".`,
+          };
+          mcqTotal += isCorrect ? q.points : 0;
+        }
+
+        for (const q of openQuestions) {
+          grades[q.id.toString()] = { score: 0, feedback: "AI grading in progress...", pending: true };
+        }
+
+        submissionGrades.set(sub.id, grades);
+        submissionMCQTotals.set(sub.id, mcqTotal);
+
+        // Save MCQ results + pending placeholders immediately
+        await storage.updateSubmission(sub.id, {
+          grades: grades as any,
+          totalScore: mcqTotal,
+          status: "submitted",
+        });
+      }
+
+      // Respond immediately — client can start refetch polling
+      res.json({ queued: toGrade.length, message: "MCQs graded. AI grading open-ended questions in background." });
+
+      // ── PHASE 2: Per-question batch AI grading across all students ──────────
+      if (openQuestions.length === 0) return;
+
+      const limit = pLimit(2); // max 2 Claude calls in parallel
+
+      await Promise.all(
+        openQuestions.map(q =>
+          limit(async () => {
+            // Build one prompt with all students' responses for this question
+            const responseLines = toGrade
+              .map(sub => {
+                const resp = ((sub.responses as any)?.[q.id.toString()] || "").trim();
+                return `[${sub.studentId}]: "${resp.length > 0 ? resp : "No response provided."}"`;
+              })
+              .join("\n");
+
+            const prompt = `
+You are a strict, fair examiner grading a student exam for the subject: ${exam.subject}.
+
+Question: ${q.text}
+Rubric / Grading Criteria: ${q.rubric || "Use your best judgement based on the question."}
+Maximum score per student: ${q.points}
+
+Grade EACH student's response below. Be consistent across all students.
+Do NOT reward irrelevant or off-topic content.
+
+Student responses (format: [studentId]: "response"):
+${responseLines}
+
+Return ONLY a valid JSON object in this exact format — one entry per studentId:
+{ "[studentId]": { "score": number, "feedback": string }, ... }
+            `.trim();
+
+            let results: Record<string, GradeEntry>;
+            try {
+              const aiResponse = await getAnthropic().messages.create({
+                model: "claude-sonnet-4-5",
+                max_tokens: 1024,
+                messages: [{ role: "user", content: prompt }],
+              });
+              const rawText =
+                aiResponse.content[0]?.type === "text"
+                  ? aiResponse.content[0].text
+                  : "{}";
+              results = JSON.parse(rawText);
+            } catch (aiErr) {
+              console.error(`Batch AI grading failed for question ${q.id}:`, aiErr);
+              // Fallback: mark as manual review needed
+              results = Object.fromEntries(
+                toGrade.map(sub => [
+                  sub.studentId.toString(),
+                  { score: 0, feedback: "AI grading failed — please score manually." },
+                ])
+              );
+            }
+
+            // Merge this question's results into each submission
+            await Promise.all(
+              toGrade.map(async sub => {
+                const result: GradeEntry = results[sub.studentId.toString()] ?? {
+                  score: 0,
+                  feedback: "No AI result returned — please score manually.",
+                };
+
+                const current = await storage.getSubmission(sub.id);
+                if (!current) return;
+
+                const mergedGrades: Record<string, GradeEntry> = {
+                  ...(current.grades as any),
+                  [q.id.toString()]: result,
+                };
+
+                const newTotal = Object.values(mergedGrades).reduce(
+                  (sum, g) => sum + ((g as any).pending ? 0 : (g.score || 0)),
+                  0
+                );
+
+                await storage.updateSubmission(sub.id, {
+                  grades: mergedGrades as any,
+                  totalScore: newTotal,
+                });
+              })
+            );
+          })
+        )
+      ).catch(err => console.error("Batch AI grading error:", err));
+
+    } catch (err) {
+      console.error("Grade-All Error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Batch grading failed" });
+      }
+    }
+  });
+
   // Users
   app.get(api.users.list.path, async (req, res) => {
     const users = await storage.getUsers();

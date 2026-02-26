@@ -69,27 +69,26 @@ export default function GradingPage() {
     }
   });
 
-  const gradeMutation = useMutation({
-    mutationFn: async (submissionId: number) => {
-      const res = await apiRequest("POST", `/api/submissions/${submissionId}/grade`, {});
+  const gradeAllMutation = useMutation({
+    mutationFn: async (examId: number) => {
+      const res = await apiRequest("POST", `/api/exams/${examId}/grade-all`, {});
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Grading failed");
+        throw new Error(err.message || "Batch grading failed");
       }
       return res.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [api.submissions.listByExam.path, selectedExamId] });
-      const pending = hasPendingGrades(data);
       toast({
-        title: pending ? "MCQ graded — AI in progress" : "Grading complete",
-        description: pending
-          ? "Multiple choice questions are done. Open-ended responses are being AI-graded in the background."
-          : "All questions have been graded successfully.",
+        title: data.queued === 0 ? "Already graded" : "Batch grading started",
+        description: data.queued === 0
+          ? "All submissions for this exam are already graded."
+          : `MCQs graded instantly. AI is scoring open-ended responses for all ${data.queued} submission(s) in the background.`,
       });
     },
     onError: (err: any) => {
-      toast({ title: "Grading failed", description: err.message, variant: "destructive" });
+      toast({ title: "Batch grading failed", description: err.message, variant: "destructive" });
     }
   });
 
@@ -352,11 +351,23 @@ export default function GradingPage() {
 
             {/* Submissions List */}
             <div className="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 font-semibold text-slate-800 flex justify-between">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 font-semibold text-slate-800 flex justify-between items-center">
                 <span>Student Submissions</span>
-                {selectedExamId && submissions && (
-                  <span className="text-xs font-normal text-slate-500">{submissions.length} total</span>
-                )}
+                <div className="flex items-center gap-3">
+                  {selectedExamId && submissions && (
+                    <span className="text-xs font-normal text-slate-500">{submissions.length} total</span>
+                  )}
+                  {selectedExamId && submissions && submissions.some(s => s.status !== "graded") && (
+                    <Button
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3"
+                      disabled={gradeAllMutation.isPending}
+                      onClick={() => gradeAllMutation.mutate(selectedExamId!)}
+                    >
+                      {gradeAllMutation.isPending ? "Grading all..." : "⚡ Grade All Submissions"}
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="divide-y divide-slate-100">
                 {!selectedExamId ? (
@@ -394,8 +405,8 @@ export default function GradingPage() {
                             </span>
                           ) : (
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${submission.status === "graded"
-                                ? "bg-green-50 text-green-700 border-green-200"
-                                : "bg-amber-50 text-amber-700 border-amber-200"
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
                               }`}>
                               {submission.status}
                             </span>
@@ -426,31 +437,6 @@ export default function GradingPage() {
                             {!isPending && <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />}
                           </Button>
 
-                          {/* Grade button — only shown when neither graded nor AI-pending */}
-                          {submission.status !== "graded" && !isPending && (
-                            <Button
-                              size="sm"
-                              className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3"
-                              disabled={gradeMutation.isPending && gradeMutation.variables === submission.id}
-                              onClick={() => {
-                                const sub = submissions?.find(s => s.id === submission.id);
-                                const session = sessions?.find(s => s.id === sub?.sessionId);
-                                if (session && session.status === "active") {
-                                  toast({
-                                    title: "Cannot Grade",
-                                    description: "Please, close exam before grading",
-                                    variant: "destructive"
-                                  });
-                                  return;
-                                }
-                                gradeMutation.mutate(submission.id);
-                              }}
-                            >
-                              {gradeMutation.isPending && gradeMutation.variables === submission.id
-                                ? "Grading..."
-                                : "Grade"}
-                            </Button>
-                          )}
                         </div>
                       </div>
                     );
