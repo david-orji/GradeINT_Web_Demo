@@ -380,67 +380,58 @@ export default function GradingPage() {
                 ) : submissions?.length === 0 ? (
                   <div className="p-12 text-center text-slate-500">No submissions found for this exam.</div>
                 ) : (
-                  submissions?.map(submission => {
-                    const isPending = hasPendingGrades(submission);
-                    return (
-                      <div key={submission.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-                            <User className="w-4 h-4 text-slate-400" />
+                  submissions
+                    ?.slice()
+                    .sort((a, b) => new Date(b.submittedAt ?? 0).getTime() - new Date(a.submittedAt ?? 0).getTime())
+                    .map(submission => {
+                      const isPending = hasPendingGrades(submission);
+                      return (
+                        <div key={submission.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                              <User className="w-4 h-4 text-slate-400" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-slate-900">
+                                {userMap.get(submission.studentId) || `Student #${submission.studentId}`}
+                              </h4>
+                              <p className="text-xs text-slate-500">
+                                Submitted {submission.submittedAt ? formatSubmissionTime(submission.submittedAt) : "N/A"}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="font-medium text-slate-900">
-                              {userMap.get(submission.studentId) || `Student #${submission.studentId}`}
-                            </h4>
-                            <p className="text-xs text-slate-500">
-                              Submitted {submission.submittedAt ? formatSubmissionTime(submission.submittedAt) : "N/A"}
-                            </p>
+                          <div className="flex items-center gap-4">
+                            {/* Status badge */}
+                            {isPending ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200 animate-pulse">
+                                AI grading…
+                              </span>
+                            ) : (
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${submission.status === "graded"
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                                }`}>
+                                {submission.status}
+                              </span>
+                            )}
+
+                            {/* Review button — disabled while AI is still running */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-blue-600 hover:text-blue-700 flex items-center gap-1 group disabled:opacity-40 disabled:cursor-not-allowed"
+                              disabled={isPending}
+                              title={isPending ? "Grading still in progress — please wait" : undefined}
+                              onClick={() => setViewingSubmissionId(submission.id)}
+                            >
+                              {isPending ? "Grading in progress" : "Review"}
+                              {!isPending && <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />}
+                            </Button>
+
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          {/* Status badge */}
-                          {isPending ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200 animate-pulse">
-                              AI grading…
-                            </span>
-                          ) : (
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${submission.status === "graded"
-                              ? "bg-green-50 text-green-700 border-green-200"
-                              : "bg-amber-50 text-amber-700 border-amber-200"
-                              }`}>
-                              {submission.status}
-                            </span>
-                          )}
-
-                          {/* Review button — disabled while AI is still running */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-blue-600 hover:text-blue-700 flex items-center gap-1 group disabled:opacity-40 disabled:cursor-not-allowed"
-                            disabled={isPending}
-                            title={isPending ? "Grading still in progress — please wait" : undefined}
-                            onClick={() => {
-                              const sub = submissions?.find(s => s.id === submission.id);
-                              const session = sessions?.find(s => s.id === sub?.sessionId);
-                              if (session && session.status === "active") {
-                                toast({
-                                  title: "Cannot Grade",
-                                  description: "Please, close this exam before grading",
-                                  variant: "destructive"
-                                });
-                                return;
-                              }
-                              setViewingSubmissionId(submission.id);
-                            }}
-                          >
-                            {isPending ? "Grading in progress" : "Review"}
-                            {!isPending && <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />}
-                          </Button>
-
-                        </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })
 
                 )}
               </div>

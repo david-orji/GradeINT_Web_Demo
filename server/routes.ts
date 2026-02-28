@@ -221,11 +221,11 @@ Return ONLY a JSON object: { "score": number, "feedback": string }
         submissionGrades.set(sub.id, grades);
         submissionMCQTotals.set(sub.id, mcqTotal);
 
-        // Save MCQ results + pending placeholders immediately
+        // Save MCQ results — if no open-ended questions, grading is complete
         await storage.updateSubmission(sub.id, {
           grades: grades as any,
           totalScore: mcqTotal,
-          status: "submitted",
+          status: openQuestions.length === 0 ? "graded" : "submitted",
         });
       }
 

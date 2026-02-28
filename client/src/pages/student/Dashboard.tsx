@@ -157,30 +157,33 @@ export default function StudentDashboard() {
                     <p className="text-sm">No ungraded submissions found.</p>
                   </div>
                 ) : (
-                  submissions.filter(s => s.status !== "graded").map((submission) => {
-                    return (
-                      <div key={submission.id} className="flex justify-between items-center p-4 rounded-lg bg-white border border-slate-100 shadow-sm">
-                        <div className="space-y-1">
-                          <h4 className="font-semibold text-slate-900 leading-none">{getExamTitle(submission.examId)}</h4>
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <Clock className="w-3 h-3" />
-                            {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString(undefined, {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            }) : "N/A"}
+                  submissions
+                    .filter(s => s.status !== "graded")
+                    .sort((a, b) => new Date(b.submittedAt ?? 0).getTime() - new Date(a.submittedAt ?? 0).getTime())
+                    .map((submission) => {
+                      return (
+                        <div key={submission.id} className="flex justify-between items-center p-4 rounded-lg bg-white border border-slate-100 shadow-sm">
+                          <div className="space-y-1">
+                            <h4 className="font-semibold text-slate-900 leading-none">{getExamTitle(submission.examId)}</h4>
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              <Clock className="w-3 h-3" />
+                              {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : "N/A"}
+                            </div>
+                          </div>
+                          <div>
+                            <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-100 uppercase text-[10px] font-bold tracking-wider">
+                              Pending Review
+                            </Badge>
                           </div>
                         </div>
-                        <div>
-                          <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-100 uppercase text-[10px] font-bold tracking-wider">
-                            Pending Review
-                          </Badge>
-                        </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })
                 )}
               </div>
             </CardContent>
@@ -205,7 +208,11 @@ export default function StudentDashboard() {
                 ) : (
                   submissions
                     .filter(s => s.status === "graded")
-                    .sort((a, b) => new Date(b.submittedAt ?? 0).getTime() - new Date(a.submittedAt ?? 0).getTime())
+                    .sort((a, b) => {
+                      const tA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+                      const tB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+                      return tB !== tA ? tB - tA : b.id - a.id;
+                    })
                     .map((submission) => {
                       const totalPoints = examTotalPointsMap[submission.examId] || 0;
                       return (

@@ -40,7 +40,7 @@ function gradeColor(letter: string): string {
     case "C": return "bg-amber-50 text-amber-700 border-amber-200";
     case "D": return "bg-orange-50 text-orange-700 border-orange-200";
     case "F": return "bg-red-50 text-red-700 border-red-200";
-    default:   return "bg-slate-100 text-slate-500 border-slate-200";
+    default: return "bg-slate-100 text-slate-500 border-slate-200";
   }
 }
 
@@ -119,7 +119,10 @@ export default function ScoreSheet() {
 
   // Closed exams only
   const closedExams = useMemo(
-    () => (exams ?? []).filter((e) => e.status === "closed"),
+    () =>
+      (exams ?? [])
+        .filter((e) => e.status === "closed")
+        .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()),
     [exams]
   );
 
@@ -247,26 +250,23 @@ export default function ScoreSheet() {
                     <button
                       key={exam.id}
                       onClick={() => setSelectedExamId(exam.id)}
-                      className={`w-full text-left px-5 py-4 flex items-center gap-3 transition-colors group ${
-                        isActive
+                      className={`w-full text-left px-5 py-4 flex items-center gap-3 transition-colors group ${isActive
                           ? "bg-blue-50 border-r-[3px] border-blue-500"
                           : "hover:bg-slate-50"
-                      }`}
+                        }`}
                     >
                       <div
-                        className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          isActive
+                        className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isActive
                             ? "bg-blue-100 text-blue-600"
                             : "bg-slate-100 text-slate-500 group-hover:bg-slate-200"
-                        }`}
+                          }`}
                       >
                         <ClipboardList className="w-4 h-4" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p
-                          className={`text-sm font-semibold truncate ${
-                            isActive ? "text-blue-700" : "text-slate-800"
-                          }`}
+                          className={`text-sm font-semibold truncate ${isActive ? "text-blue-700" : "text-slate-800"
+                            }`}
                         >
                           {exam.title}
                         </p>
@@ -275,11 +275,10 @@ export default function ScoreSheet() {
                         </p>
                       </div>
                       <ChevronRight
-                        className={`w-4 h-4 flex-shrink-0 transition-transform ${
-                          isActive
+                        className={`w-4 h-4 flex-shrink-0 transition-transform ${isActive
                             ? "text-blue-400 translate-x-0.5"
                             : "text-slate-300 group-hover:text-slate-400"
-                        }`}
+                          }`}
                       />
                     </button>
                   );
@@ -412,15 +411,14 @@ export default function ScoreSheet() {
                                   <span className="text-sm font-semibold text-slate-700">{row.percent}</span>
                                   <div className="w-full max-w-[80px] h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                     <div
-                                      className={`h-full rounded-full transition-all ${
-                                        pctNum >= 90
+                                      className={`h-full rounded-full transition-all ${pctNum >= 90
                                           ? "bg-emerald-500"
                                           : pctNum >= 70
-                                          ? "bg-blue-500"
-                                          : pctNum >= 60
-                                          ? "bg-amber-500"
-                                          : "bg-red-500"
-                                      }`}
+                                            ? "bg-blue-500"
+                                            : pctNum >= 60
+                                              ? "bg-amber-500"
+                                              : "bg-red-500"
+                                        }`}
                                       style={{ width: `${pctNum}%` }}
                                     />
                                   </div>
@@ -447,9 +445,9 @@ export default function ScoreSheet() {
                           <strong className="text-slate-700">
                             {scoreRows.length > 0
                               ? `${Math.round(
-                                  scoreRows.reduce((a, r) => a + (r.score as number), 0) /
-                                    scoreRows.length
-                                )} / ${totalPossible}`
+                                scoreRows.reduce((a, r) => a + (r.score as number), 0) /
+                                scoreRows.length
+                              )} / ${totalPossible}`
                               : "–"}
                           </strong>
                         </span>
@@ -458,12 +456,12 @@ export default function ScoreSheet() {
                           <strong className="text-slate-700">
                             {scoreRows.length > 0
                               ? percentage(
-                                  Math.round(
-                                    scoreRows.reduce((a, r) => a + (r.score as number), 0) /
-                                      scoreRows.length
-                                  ),
-                                  totalPossible
-                                )
+                                Math.round(
+                                  scoreRows.reduce((a, r) => a + (r.score as number), 0) /
+                                  scoreRows.length
+                                ),
+                                totalPossible
+                              )
                               : "–"}
                           </strong>
                         </span>
