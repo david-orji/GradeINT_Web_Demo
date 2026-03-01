@@ -551,6 +551,20 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
 
   // Exams
   app.get(api.exams.list.path, requireAuth, async (req, res) => {
+    const user = req.user as any;
+
+    if (user.role === "student") {
+      // Students only see published exams from teachers they are accepted-linked with
+      const linkedTeacherIds = await storage.getLinkedTeacherIds(user.id);
+      if (linkedTeacherIds.length === 0) return res.json([]);
+      const allExams = await storage.getExams();
+      const visible = allExams.filter(
+        e => linkedTeacherIds.includes(e.teacherId) && e.status === "published"
+      );
+      return res.json(visible);
+    }
+
+    // Teachers see their own exams; admins see all
     const teacherId = req.query.teacherId
       ? Number(req.query.teacherId)
       : undefined;
@@ -589,7 +603,23 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
 
   // Sessions
   app.get(api.sessions.list.path, requireAuth, async (req, res) => {
+    const user = req.user as any;
     const examId = req.query.examId ? Number(req.query.examId) : undefined;
+
+    if (user.role === "student") {
+      // Only expose sessions for exams from accepted linked teachers
+      const linkedTeacherIds = await storage.getLinkedTeacherIds(user.id);
+      if (linkedTeacherIds.length === 0) return res.json([]);
+      const allSessions = await storage.getSessions(examId);
+      const allExams = await storage.getExams();
+      const linkedExamIds = new Set(
+        allExams
+          .filter(e => linkedTeacherIds.includes(e.teacherId))
+          .map(e => e.id)
+      );
+      return res.json(allSessions.filter(s => linkedExamIds.has(s.examId)));
+    }
+
     const sessions = await storage.getSessions(examId);
     res.json(sessions);
   });

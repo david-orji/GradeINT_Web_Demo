@@ -2,7 +2,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
-import { Plus, MoreHorizontal, Search, FileText, Pencil, Trash2, Copy, Check } from "lucide-react";
+import { Plus, MoreHorizontal, Search, FileText, Pencil, Trash2, Copy, Check, Lock } from "lucide-react";
 import { useExams, useCreateExam, usePublishExam, useUpdateExam, useDeleteExam, useExamQuestions } from "@/hooks/use-exams";
 import { api, buildUrl } from "@shared/routes";
 import { useToast } from "@/hooks/use-toast";
@@ -116,10 +116,11 @@ export default function ExamsList() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("create") === "true") {
+    // Only auto-open if the teacher is active/validated
+    if (params.get("create") === "true" && user?.status === "active") {
       setIsOpen(true);
     }
-  }, [location]);
+  }, [location, user?.status]);
 
   const form = useForm<CreateForm>({
     resolver: zodResolver(createSchema),
@@ -240,165 +241,176 @@ export default function ExamsList() {
               <p className="text-slate-500 mt-1">Manage your assessments and question banks.</p>
             </div>
 
-            <Dialog open={isOpen} onOpenChange={(open) => {
-              setIsOpen(open);
-              if (!open) {
-                setEditingExam(null);
-                form.reset({
-                  durationMinutes: 60,
-                  questions: [{ text: "", type: "short_answer", points: 1 }]
-                });
-              }
-            }}>
-              <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/10">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create New Exam
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>{editingExam ? "Edit Exam" : "Create New Exam"}</DialogTitle>
-                  <DialogDescription>Define your assessment structure and grading criteria.</DialogDescription>
-                </DialogHeader>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="title">Exam Title</Label>
-                      <Input id="title" {...form.register("title")} />
+            {user?.status === "pending" ? (
+              // Pending teachers: show a locked state instead of the Create button
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">
+                <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">Account Pending Approval</p>
+                  <p className="text-xs text-amber-600">You can create exams once a System Administrator validates your account.</p>
+                </div>
+              </div>
+            ) : (
+              <Dialog open={isOpen} onOpenChange={(open) => {
+                setIsOpen(open);
+                if (!open) {
+                  setEditingExam(null);
+                  form.reset({
+                    durationMinutes: 60,
+                    questions: [{ text: "", type: "short_answer", points: 1 }]
+                  });
+                }
+              }}>
+                <DialogTrigger asChild>
+                  <Button className="bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/10">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create New Exam
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>{editingExam ? "Edit Exam" : "Create New Exam"}</DialogTitle>
+                    <DialogDescription>Define your assessment structure and grading criteria.</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="title">Exam Title</Label>
+                        <Input id="title" {...form.register("title")} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="subject">Subject</Label>
+                        <Input id="subject" {...form.register("subject")} />
+                      </div>
                     </div>
+
                     <div className="space-y-2">
-                      <Label htmlFor="subject">Subject</Label>
-                      <Input id="subject" {...form.register("subject")} />
+                      <Label htmlFor="description">Instructions for Students</Label>
+                      <Textarea
+                        id="description"
+                        {...form.register("description")}
+                        placeholder="Enter instructions that students will see before and during the exam..."
+                        className="min-h-[100px]"
+                      />
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Instructions for Students</Label>
-                    <Textarea
-                      id="description"
-                      {...form.register("description")}
-                      placeholder="Enter instructions that students will see before and during the exam..."
-                      className="min-h-[100px]"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="duration">Duration (mins)</Label>
-                      <Input id="duration" type="number" {...form.register("durationMinutes", { valueAsNumber: true })} />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-base font-semibold">Questions</Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => append({ text: "", type: "short_answer", points: 1 })}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Question
-                      </Button>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="duration">Duration (mins)</Label>
+                        <Input id="duration" type="number" {...form.register("durationMinutes", { valueAsNumber: true })} />
+                      </div>
                     </div>
 
                     <div className="space-y-4">
-                      {fields.map((field, index) => (
-                        <div key={field.id} className="p-4 border border-slate-200 rounded-lg space-y-4 relative bg-slate-50/50">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => remove(index)}
-                            className="absolute top-4 right-4 text-slate-400 hover:text-red-500"
-                          >
-                            <Plus className="w-4 h-4 rotate-45" />
-                          </Button>
+                      <div className="flex justify-between items-center">
+                        <Label className="text-base font-semibold">Questions</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => append({ text: "", type: "short_answer", points: 1 })}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Question
+                        </Button>
+                      </div>
 
-                          <div className="space-y-2">
-                            <Label>Question {index + 1}</Label>
-                            <Input {...form.register(`questions.${index}.text` as const)} placeholder="Enter question text..." />
-                          </div>
+                      <div className="space-y-4">
+                        {fields.map((field, index) => (
+                          <div key={field.id} className="p-4 border border-slate-200 rounded-lg space-y-4 relative bg-slate-50/50">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => remove(index)}
+                              className="absolute top-4 right-4 text-slate-400 hover:text-red-500"
+                            >
+                              <Plus className="w-4 h-4 rotate-45" />
+                            </Button>
 
-                          <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <Label>Type</Label>
-                              <select
-                                {...form.register(`questions.${index}.type` as const)}
-                                className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                              >
-                                <option value="short_answer">Short Answer</option>
-                                <option value="multiple_choice">Multiple Choice</option>
-                                <option value="essay">Essay</option>
-                              </select>
+                              <Label>Question {index + 1}</Label>
+                              <Input {...form.register(`questions.${index}.text` as const)} placeholder="Enter question text..." />
                             </div>
-                            <div className="space-y-2">
-                              <Label>Points</Label>
-                              <Input type="number" {...form.register(`questions.${index}.points` as const, { valueAsNumber: true })} />
-                            </div>
-                          </div>
 
-                          {form.watch(`questions.${index}.type`) === "multiple_choice" && (
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label>Type</Label>
+                                <select
+                                  {...form.register(`questions.${index}.type` as const)}
+                                  className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                >
+                                  <option value="short_answer">Short Answer</option>
+                                  <option value="multiple_choice">Multiple Choice</option>
+                                  <option value="essay">Essay</option>
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Points</Label>
+                                <Input type="number" {...form.register(`questions.${index}.points` as const, { valueAsNumber: true })} />
+                              </div>
+                            </div>
+
+                            {form.watch(`questions.${index}.type`) === "multiple_choice" && (
+                              <div className="space-y-2">
+                                <Label>
+                                  Options (comma separated) <span className="text-red-500">*</span>
+                                </Label>
+                                <Input
+                                  placeholder="Option A, Option B, Option C"
+                                  defaultValue={form.getValues(`questions.${index}.options`)?.join(", ")}
+                                  onChange={(e) => {
+                                    const options = e.target.value.split(",").map(s => s.trim()).filter(s => s !== "");
+                                    form.setValue(`questions.${index}.options`, options, { shouldValidate: true });
+                                  }}
+                                />
+                                {form.formState.errors.questions?.[index]?.options && (
+                                  <p className="text-xs text-red-500">{form.formState.errors.questions[index]?.options?.message as string}</p>
+                                )}
+                              </div>
+                            )}
+
                             <div className="space-y-2">
                               <Label>
-                                Options (comma separated) <span className="text-red-500">*</span>
+                                Grading Rubric / Key
+                                {form.watch(`questions.${index}.type`) === "multiple_choice" && (
+                                  <span className="text-red-500 ml-1">*</span>
+                                )}
                               </Label>
-                              <Input
-                                placeholder="Option A, Option B, Option C"
-                                defaultValue={form.getValues(`questions.${index}.options`)?.join(", ")}
-                                onChange={(e) => {
-                                  const options = e.target.value.split(",").map(s => s.trim()).filter(s => s !== "");
-                                  form.setValue(`questions.${index}.options`, options, { shouldValidate: true });
-                                }}
+                              <Textarea
+                                {...form.register(`questions.${index}.rubric` as const)}
+                                placeholder="State answer or describe criteria for AI grading..."
+                                className="h-20"
                               />
-                              {form.formState.errors.questions?.[index]?.options && (
-                                <p className="text-xs text-red-500">{form.formState.errors.questions[index]?.options?.message as string}</p>
+                              {form.formState.errors.questions?.[index]?.rubric && (
+                                <p className="text-xs text-red-500">{form.formState.errors.questions[index]?.rubric?.message as string}</p>
                               )}
                             </div>
-                          )}
-
-                          <div className="space-y-2">
-                            <Label>
-                              Grading Rubric / Key
-                              {form.watch(`questions.${index}.type`) === "multiple_choice" && (
-                                <span className="text-red-500 ml-1">*</span>
-                              )}
-                            </Label>
-                            <Textarea
-                              {...form.register(`questions.${index}.rubric` as const)}
-                              placeholder="State answer or describe criteria for AI grading..."
-                              className="h-20"
-                            />
-                            {form.formState.errors.questions?.[index]?.rubric && (
-                              <p className="text-xs text-red-500">{form.formState.errors.questions[index]?.rubric?.message as string}</p>
-                            )}
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  <DialogFooter className="flex items-center justify-between gap-4">
-                    <div className="flex-1 text-sm text-slate-500">
-                      {fields.length === 0 && (
-                        <span className="text-amber-600 font-medium">Add at least one question to publish this exam later.</span>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button type="button" variant="outline" onClick={() => {
-                        setIsOpen(false);
-                        setEditingExam(null);
-                      }}>Cancel</Button>
-                      <Button type="submit" disabled={createExam.isPending || updateExam.isPending}>
-                        {createExam.isPending || updateExam.isPending ? "Saving..." : "Save Exam"}
-                      </Button>
-                    </div>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+                    <DialogFooter className="flex items-center justify-between gap-4">
+                      <div className="flex-1 text-sm text-slate-500">
+                        {fields.length === 0 && (
+                          <span className="text-amber-600 font-medium">Add at least one question to publish this exam later.</span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" onClick={() => {
+                          setIsOpen(false);
+                          setEditingExam(null);
+                        }}>Cancel</Button>
+                        <Button type="submit" disabled={createExam.isPending || updateExam.isPending}>
+                          {createExam.isPending || updateExam.isPending ? "Saving..." : "Save Exam"}
+                        </Button>
+                      </div>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
 
           <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">

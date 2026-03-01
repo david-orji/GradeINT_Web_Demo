@@ -30,6 +30,7 @@ export interface IStorage {
   createLink(teacherId: number, studentId: number): Promise<TeacherStudentLink>;
   getLinksByTeacher(teacherId: number): Promise<TeacherStudentLink[]>;
   getLinksByStudent(studentId: number): Promise<TeacherStudentLink[]>;
+  getLinkedTeacherIds(studentId: number): Promise<number[]>;
   getLinkByTeacherAndStudent(teacherId: number, studentId: number): Promise<TeacherStudentLink | undefined>;
   updateLink(id: number, status: "accepted" | "declined"): Promise<TeacherStudentLink>;
 
@@ -141,6 +142,19 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(teacherStudentLinks)
       .where(eq(teacherStudentLinks.studentId, studentId));
+  }
+
+  async getLinkedTeacherIds(studentId: number): Promise<number[]> {
+    const links = await db
+      .select({ teacherId: teacherStudentLinks.teacherId })
+      .from(teacherStudentLinks)
+      .where(
+        and(
+          eq(teacherStudentLinks.studentId, studentId),
+          eq(teacherStudentLinks.status, "accepted")
+        )
+      );
+    return links.map(l => l.teacherId);
   }
 
   async getLinkByTeacherAndStudent(teacherId: number, studentId: number): Promise<TeacherStudentLink | undefined> {

@@ -17,14 +17,20 @@ export default function StudentDashboard() {
   const { data: submissions } = useQuery<any[]>({
     queryKey: ["/api/submissions/student", user?.id],
     queryFn: async () => {
-      const res = await fetch(`/api/submissions/student/${user?.id}`);
+      const res = await fetch(`/api/submissions/student/${user?.id}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch submissions");
       return res.json();
     },
     enabled: !!user?.id
   });
   const { data: exams } = useQuery<any[]>({
-    queryKey: ["/api/exams"]
+    queryKey: ["/api/exams"],
+    queryFn: async () => {
+      const res = await fetch("/api/exams", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch exams");
+      return res.json();
+    },
+    enabled: !!user?.id,
   });
   const [error, setError] = useState("");
 

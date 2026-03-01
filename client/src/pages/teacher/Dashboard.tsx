@@ -92,8 +92,10 @@ export default function TeacherDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <Button
                   variant="ghost"
-                  onClick={() => setLocation("/teacher/exams?create=true")}
-                  className="flex flex-col items-center justify-center p-4 h-auto border border-dashed border-slate-300 rounded-lg hover:bg-slate-50 hover:border-blue-300 hover:text-blue-600 transition-all group"
+                  onClick={() => user?.status === "active" && setLocation("/teacher/exams?create=true")}
+                  disabled={user?.status !== "active"}
+                  title={user?.status === "pending" ? "Pending admin approval" : undefined}
+                  className="flex flex-col items-center justify-center p-4 h-auto border border-dashed border-slate-300 rounded-lg hover:bg-slate-50 hover:border-blue-300 hover:text-blue-600 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:bg-blue-100">
                     <FileText className="w-5 h-5" />
