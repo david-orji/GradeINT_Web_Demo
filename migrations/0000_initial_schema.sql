@@ -71,3 +71,18 @@ CREATE TABLE IF NOT EXISTS "submissions" (
 	"grades" jsonb,
 	"total_score" integer
 );
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "conversations" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"title" text NOT NULL,
+	"created_at" timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "messages" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"conversation_id" integer NOT NULL,
+	"role" text NOT NULL,
+	"content" text NOT NULL,
+	"created_at" timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	CONSTRAINT "messages_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE cascade ON UPDATE no action
+);
