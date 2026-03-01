@@ -78,6 +78,15 @@ CREATE TABLE IF NOT EXISTS "conversations" (
 	"created_at" timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "user_sessions" (
+	"sid" varchar NOT NULL COLLATE "default",
+	"sess" json NOT NULL,
+	"expire" timestamp(6) NOT NULL,
+	CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
+) WITH (OIDS=FALSE);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "user_sessions" ("expire");
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "messages" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"conversation_id" integer NOT NULL,

@@ -33,7 +33,7 @@ const pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 app.use(
   session({
-    store: new PgSession({ pool: pgPool, tableName: "user_sessions", createTableIfMissing: true }),
+    store: new PgSession({ pool: pgPool, tableName: "user_sessions" }),
     secret: process.env.SESSION_SECRET ?? "gradeint-dev-secret-change-in-prod",
     resave: false,
     saveUninitialized: false,
