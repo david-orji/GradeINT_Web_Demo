@@ -3,17 +3,17 @@ import { api, buildUrl } from "@shared/routes";
 import type { CreateExamRequest, CreateQuestionRequest } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
+// All fetches include credentials so the session cookie is sent
+const withCredentials: RequestInit = { credentials: "include" };
+
 export function useExams(teacherId?: number) {
   return useQuery({
     queryKey: [api.exams.list.path, teacherId],
     queryFn: async () => {
-      // In a real app we'd pass teacherId as query param
-      const res = await fetch(api.exams.list.path);
+      const res = await fetch(api.exams.list.path, withCredentials);
       if (!res.ok) throw new Error("Failed to fetch exams");
       const allExams = await res.json();
       const parsed = api.exams.list.responses[200].parse(allExams);
-
-      // Client-side filter for prototype since backend is simple
       if (teacherId) {
         return parsed.filter(e => e.teacherId === teacherId);
       }
@@ -27,7 +27,7 @@ export function useExam(id: number) {
     queryKey: [api.exams.get.path, id],
     queryFn: async () => {
       const url = buildUrl(api.exams.get.path, { id });
-      const res = await fetch(url);
+      const res = await fetch(url, withCredentials);
       if (!res.ok) throw new Error("Failed to fetch exam");
       return api.exams.get.responses[200].parse(await res.json());
     },
@@ -45,6 +45,7 @@ export function useCreateExam() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to create exam");
       return api.exams.create.responses[201].parse(await res.json());
@@ -67,6 +68,7 @@ export function useUpdateExam() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to update exam");
       return api.exams.update.responses[200].parse(await res.json());
@@ -85,7 +87,7 @@ export function useDeleteExam() {
   return useMutation({
     mutationFn: async (id: number) => {
       const url = buildUrl(api.exams.delete.path, { id });
-      const res = await fetch(url, { method: "DELETE" });
+      const res = await fetch(url, { method: "DELETE", credentials: "include" });
       if (!res.ok) throw new Error("Failed to delete exam");
       return await res.json();
     },
@@ -102,7 +104,7 @@ export function useExamQuestions(examId: number, options?: { enabled?: boolean }
     queryKey: ["examQuestions", examId],
     queryFn: async () => {
       const url = buildUrl(api.questions.list.path, { examId });
-      const res = await fetch(url);
+      const res = await fetch(url, withCredentials);
       if (!res.ok) throw new Error("Failed to fetch questions");
       return api.questions.list.responses[200].parse(await res.json());
     },
@@ -121,6 +123,7 @@ export function useCreateQuestion() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to add question");
       return api.questions.create.responses[201].parse(await res.json());
@@ -139,7 +142,7 @@ export function usePublishExam() {
   return useMutation({
     mutationFn: async (examId: number) => {
       const url = buildUrl(api.exams.publish.path, { id: examId });
-      const res = await fetch(url, { method: "PATCH" });
+      const res = await fetch(url, { method: "PATCH", credentials: "include" });
       if (!res.ok) throw new Error("Failed to publish exam");
       return api.exams.publish.responses[200].parse(await res.json());
     },
@@ -155,7 +158,7 @@ export function useSubmissionsByExam(examId: number) {
     queryKey: [api.submissions.listByExam.path, examId],
     queryFn: async () => {
       const url = buildUrl(api.submissions.listByExam.path, { examId });
-      const res = await fetch(url);
+      const res = await fetch(url, withCredentials);
       if (!res.ok) throw new Error("Failed to fetch submissions");
       return api.submissions.listByExam.responses[200].parse(await res.json());
     },
@@ -173,14 +176,13 @@ export function useCreateSubmission() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to submit exam");
       return api.submissions.create.responses[201].parse(await res.json());
     },
-    onSuccess: (data) => {
-      // Invalidate teacher-side submissions list
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.submissions.listByExam.path] });
-      // Also invalidate the student dashboard's own submissions query so it refreshes immediately
       queryClient.invalidateQueries({ queryKey: ["/api/submissions/student"] });
       toast({ title: "Exam Submitted", description: "Your responses have been sealed and uploaded." });
     },

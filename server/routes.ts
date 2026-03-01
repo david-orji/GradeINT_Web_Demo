@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
@@ -8,11 +8,15 @@ import {
   insertQuestionSchema,
   insertSessionSchema,
   insertSubmissionSchema,
+  registerSchema,
+  loginSchema,
   type Question,
 } from "@shared/schema";
+import { hashPassword, sanitizeUser } from "./auth";
 
 import Anthropic from "@anthropic-ai/sdk";
 import pLimit from "p-limit";
+import passport from "passport";
 
 // Lazy init — avoids crash on startup when API key is absent
 let _anthropic: Anthropic | null = null;
@@ -25,12 +29,232 @@ function getAnthropic(): Anthropic {
   return _anthropic;
 }
 
+// ── Middleware helpers ────────────────────────────────────────────────────────
+
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+  next();
+}
+
+function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user = req.user as any;
+    if (!user || !roles.includes(user.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    next();
+  };
+}
+
+// Teachers that are still pending cannot create exams
+function requireActiveTeacher(req: Request, res: Response, next: NextFunction) {
+  const user = req.user as any;
+  if (user?.status !== "active") {
+    return res.status(403).json({ message: "Your account is pending admin validation. You cannot perform this action yet." });
+  }
+  next();
+}
+
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
-  // === API ROUTES ===
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AUTH ROUTES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** POST /api/auth/register */
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const parsed = registerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Validation error" });
+      }
+      const { username, email, password, name, role, institution } = parsed.data;
+
+      // Check for existing username / email
+      const existingByUsername = await storage.getUserByUsername(username);
+      if (existingByUsername) return res.status(409).json({ message: "Username already taken" });
+      const existingByEmail = await storage.getUserByEmail(email);
+      if (existingByEmail) return res.status(409).json({ message: "Email already registered" });
+
+      const passwordHash = await hashPassword(password);
+
+      // Teachers start pending; students are immediately active
+      const status = role === "teacher" ? "pending" : "active";
+
+      const user = await storage.createUser({
+        username, email, passwordHash, name, role, institution, status,
+      });
+
+      const safe = sanitizeUser(user);
+      res.status(201).json({ user: safe, status });
+    } catch (err) {
+      console.error("Register error:", err);
+      res.status(500).json({ message: "Registration failed" });
+    }
+  });
+
+  /** POST /api/auth/login */
+  app.post("/api/auth/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) return next(err);
+      if (!user) return res.status(401).json({ message: info?.message ?? "Invalid credentials" });
+
+      req.logIn(user, (err) => {
+        if (err) return next(err);
+        return res.json({ user: sanitizeUser(user) });
+      });
+    })(req, res, next);
+  });
+
+  /** POST /api/auth/logout */
+  app.post("/api/auth/logout", (req, res, next) => {
+    req.logout((err) => {
+      if (err) return next(err);
+      res.json({ success: true });
+    });
+  });
+
+  /** GET /api/auth/me */
+  app.get("/api/auth/me", (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    res.json({ user: sanitizeUser(req.user as any) });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ADMIN ROUTES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** GET /api/admin/pending-teachers */
+  app.get("/api/admin/pending-teachers", requireAuth, requireRole("admin"), async (_req, res) => {
+    try {
+      const teachers = await storage.getPendingTeachers();
+      res.json(teachers.map(sanitizeUser));
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch pending teachers" });
+    }
+  });
+
+  /** PATCH /api/admin/teachers/:id/validate */
+  app.patch("/api/admin/teachers/:id/validate", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { approve } = z.object({ approve: z.boolean() }).parse(req.body);
+      const teacher = await storage.validateTeacher(id, approve);
+      res.json(sanitizeUser(teacher));
+    } catch (err) {
+      console.error("Validate teacher error:", err);
+      res.status(500).json({ message: "Validation failed" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TEACHER–STUDENT LINK ROUTES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** GET /api/teacher/by-code/:code — look up a teacher by profile code */
+  app.get("/api/teacher/by-code/:code", requireAuth, async (req, res) => {
+    const teacher = await storage.getUserByProfileCode(req.params.code as string);
+    if (!teacher || teacher.role !== "teacher")
+      return res.status(404).json({ message: "No teacher found with that code" });
+    // Return only safe fields
+    res.json(sanitizeUser(teacher));
+  });
+
+  /** POST /api/links/request — student sends a link request to a teacher */
+  app.post("/api/links/request", requireAuth, requireRole("student"), async (req, res) => {
+    try {
+      const student = req.user as any;
+      const { teacherId } = z.object({ teacherId: z.number() }).parse(req.body);
+
+      // Ensure teacher exists and is active
+      const teacher = await storage.getUser(teacherId);
+      if (!teacher || teacher.role !== "teacher" || teacher.status !== "active") {
+        return res.status(404).json({ message: "Teacher not found or not yet active" });
+      }
+
+      // Prevent duplicate requests
+      const existing = await storage.getLinkByTeacherAndStudent(teacherId, student.id);
+      if (existing) {
+        const msgs: Record<string, string> = {
+          pending: "You already have a pending request to this teacher",
+          accepted: "You are already linked to this teacher",
+          declined: "Your previous request was declined. You cannot re-request.",
+        };
+        return res.status(409).json({ message: msgs[existing.status] ?? "Already requested" });
+      }
+
+      const link = await storage.createLink(teacherId, student.id);
+      res.status(201).json(link);
+    } catch (err) {
+      console.error("Link request error:", err);
+      res.status(500).json({ message: "Request failed" });
+    }
+  });
+
+  /** GET /api/links/incoming — teacher fetches their pending link requests (with student info) */
+  app.get("/api/links/incoming", requireAuth, requireRole("teacher", "admin"), async (req, res) => {
+    try {
+      const teacher = req.user as any;
+      const links = await storage.getLinksByTeacher(teacher.id);
+
+      // Attach student details to each link
+      const enriched = await Promise.all(
+        links.map(async (link) => {
+          const student = await storage.getUser(link.studentId);
+          return { ...link, student: student ? sanitizeUser(student) : null };
+        })
+      );
+      res.json(enriched);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch requests" });
+    }
+  });
+
+  /** GET /api/links/my-teachers — student fetches their linked teachers */
+  app.get("/api/links/my-teachers", requireAuth, requireRole("student"), async (req, res) => {
+    try {
+      const student = req.user as any;
+      const links = await storage.getLinksByStudent(student.id);
+
+      const enriched = await Promise.all(
+        links.map(async (link) => {
+          const teacher = await storage.getUser(link.teacherId);
+          return { ...link, teacher: teacher ? sanitizeUser(teacher) : null };
+        })
+      );
+      res.json(enriched);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch teachers" });
+    }
+  });
+
+  /** PATCH /api/links/:id — teacher accepts or declines */
+  app.patch("/api/links/:id", requireAuth, requireRole("teacher"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { status } = z.object({ status: z.enum(["accepted", "declined"]) }).parse(req.body);
+
+      const teacher = req.user as any;
+      // Fetch to verify ownership
+      const links = await storage.getLinksByTeacher(teacher.id);
+      const link = links.find(l => l.id === id);
+      if (!link) return res.status(404).json({ message: "Link request not found" });
+
+      const updated = await storage.updateLink(id, status);
+      res.json(updated);
+    } catch (err) {
+      console.error("Link respond error:", err);
+      res.status(500).json({ message: "Failed to respond to request" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GRADING ROUTES
+  // ═══════════════════════════════════════════════════════════════════════════
 
   // Grading route — Phase 1: MCQs graded instantly and saved; Phase 2: AI runs in background
   app.post("/api/submissions/:id/grade", async (req, res) => {
@@ -75,7 +299,6 @@ export async function registerRoutes(
           grades[q.id.toString()] = grade;
           totalScore += grade.score;
         } else {
-          // Placeholder — AI will fill this in during Phase 2
           grades[q.id.toString()] = {
             score: 0,
             feedback: "AI grading in progress...",
@@ -85,14 +308,13 @@ export async function registerRoutes(
         }
       }
 
-      // Save MCQ results and pending placeholders immediately, then respond
       const updated = await storage.updateSubmission(submissionId, {
         grades: grades as any,
         totalScore,
         status: "submitted",
       });
 
-      res.json(updated); // ← client gets result right away
+      res.json(updated);
 
       // ── PHASE 2: Grade open-ended questions in the background ──────────────
       if (openEndedQuestions.length === 0) return;
@@ -139,7 +361,6 @@ Return ONLY a JSON object: { "score": number, "feedback": string }
               };
             }
 
-            // Merge this result into the live DB record (fetch-merge-save)
             const current = await storage.getSubmission(submissionId);
             if (!current) return;
             const mergedGrades: Record<string, GradeEntry> = {
@@ -166,8 +387,7 @@ Return ONLY a JSON object: { "score": number, "feedback": string }
     }
   });
 
-  // Exam-level batch grading — grades ALL ungraded submissions for an exam at once
-  // MCQs: instant in-process. Open-ended: one Claude call per question, all students in one prompt.
+  // Exam-level batch grading
   app.post("/api/exams/:id/grade-all", async (req, res) => {
     try {
       const examId = Number(req.params.id);
@@ -178,7 +398,6 @@ Return ONLY a JSON object: { "score": number, "feedback": string }
       if (questions.length === 0)
         return res.status(400).json({ message: "Exam has no questions" });
 
-      // Only grade submissions that are not already graded
       const allSubmissions = await storage.getSubmissionsByExam(examId);
       const toGrade = allSubmissions.filter(s => s.status !== "graded");
 
@@ -187,11 +406,9 @@ Return ONLY a JSON object: { "score": number, "feedback": string }
 
       type GradeEntry = { score: number; feedback: string; pending?: boolean };
 
-      // ── PHASE 1: Grade all MCQs instantly for every submission ──────────────
       const mcqQuestions = questions.filter(q => q.type === "multiple_choice");
       const openQuestions = questions.filter(q => q.type !== "multiple_choice");
 
-      // Initialise each submission's grade map with MCQ results + pending placeholders
       const submissionGrades = new Map<number, Record<string, GradeEntry>>();
       const submissionMCQTotals = new Map<number, number>();
 
@@ -221,7 +438,6 @@ Return ONLY a JSON object: { "score": number, "feedback": string }
         submissionGrades.set(sub.id, grades);
         submissionMCQTotals.set(sub.id, mcqTotal);
 
-        // Save MCQ results — if no open-ended questions, grading is complete
         await storage.updateSubmission(sub.id, {
           grades: grades as any,
           totalScore: mcqTotal,
@@ -229,18 +445,15 @@ Return ONLY a JSON object: { "score": number, "feedback": string }
         });
       }
 
-      // Respond immediately — client can start refetch polling
       res.json({ queued: toGrade.length, message: "MCQs graded. AI grading open-ended questions in background." });
 
-      // ── PHASE 2: Per-question batch AI grading across all students ──────────
       if (openQuestions.length === 0) return;
 
-      const limit = pLimit(2); // max 2 Claude calls in parallel
+      const limit = pLimit(2);
 
       await Promise.all(
         openQuestions.map(q =>
           limit(async () => {
-            // Build one prompt with all students' responses for this question
             const responseLines = toGrade
               .map(sub => {
                 const resp = ((sub.responses as any)?.[q.id.toString()] || "").trim();
@@ -279,7 +492,6 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
               results = JSON.parse(rawText);
             } catch (aiErr) {
               console.error(`Batch AI grading failed for question ${q.id}:`, aiErr);
-              // Fallback: mark as manual review needed
               results = Object.fromEntries(
                 toGrade.map(sub => [
                   sub.studentId.toString(),
@@ -288,7 +500,6 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
               );
             }
 
-            // Merge this question's results into each submission
             await Promise.all(
               toGrade.map(async sub => {
                 const result: GradeEntry = results[sub.studentId.toString()] ?? {
@@ -327,14 +538,19 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EXISTING RESOURCE ROUTES
+  // (protected with requireAuth where appropriate)
+  // ═══════════════════════════════════════════════════════════════════════════
+
   // Users
-  app.get(api.users.list.path, async (req, res) => {
+  app.get(api.users.list.path, requireAuth, requireRole("admin"), async (req, res) => {
     const users = await storage.getUsers();
-    res.json(users);
+    res.json(users.map(sanitizeUser));
   });
 
   // Exams
-  app.get(api.exams.list.path, async (req, res) => {
+  app.get(api.exams.list.path, requireAuth, async (req, res) => {
     const teacherId = req.query.teacherId
       ? Number(req.query.teacherId)
       : undefined;
@@ -342,7 +558,7 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
     res.json(exams);
   });
 
-  app.post(api.exams.create.path, async (req, res) => {
+  app.post(api.exams.create.path, requireAuth, requireRole("teacher", "admin"), requireActiveTeacher, async (req, res) => {
     try {
       const exam = await storage.createExam(req.body);
       res.status(201).json(exam);
@@ -352,19 +568,19 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
     }
   });
 
-  app.get(api.exams.get.path, async (req, res) => {
+  app.get(api.exams.get.path, requireAuth, async (req, res) => {
     const exam = await storage.getExam(Number(req.params.id));
     if (!exam) return res.status(404).json({ message: "Exam not found" });
     res.json(exam);
   });
 
   // Questions
-  app.get(api.questions.list.path, async (req, res) => {
+  app.get(api.questions.list.path, requireAuth, async (req, res) => {
     const questions = await storage.getQuestions(Number(req.params.examId));
     res.json(questions);
   });
 
-  app.post(api.questions.create.path, async (req, res) => {
+  app.post(api.questions.create.path, requireAuth, requireRole("teacher", "admin"), requireActiveTeacher, async (req, res) => {
     const examId = Number(req.params.examId);
     const input = api.questions.create.input.parse(req.body);
     const question = await storage.createQuestion({ ...input, examId });
@@ -372,13 +588,13 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
   });
 
   // Sessions
-  app.get(api.sessions.list.path, async (req, res) => {
+  app.get(api.sessions.list.path, requireAuth, async (req, res) => {
     const examId = req.query.examId ? Number(req.query.examId) : undefined;
     const sessions = await storage.getSessions(examId);
     res.json(sessions);
   });
 
-  app.post(api.sessions.create.path, async (req, res) => {
+  app.post(api.sessions.create.path, requireAuth, requireRole("teacher", "admin"), requireActiveTeacher, async (req, res) => {
     const input = api.sessions.create.input.parse(req.body);
     const exam = await storage.getExam(input.examId);
 
@@ -399,35 +615,33 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
     res.status(201).json(session);
   });
 
-  app.get(api.sessions.get.path, async (req, res) => {
+  app.get(api.sessions.get.path, requireAuth, async (req, res) => {
     const session = await storage.getSession(Number(req.params.id));
     if (!session) return res.status(404).json({ message: "Session not found" });
     res.json(session);
   });
 
   // Submissions
-  app.get("/api/submissions/exam/:examId", async (req, res) => {
+  app.get("/api/submissions/exam/:examId", requireAuth, async (req, res) => {
     const examId = Number(req.params.examId);
     const examSubmissions = await storage.getSubmissionsByExam(examId);
     res.json(examSubmissions);
   });
 
-  app.get("/api/submissions/student/:studentId", async (req, res) => {
+  app.get("/api/submissions/student/:studentId", requireAuth, async (req, res) => {
     const studentId = Number(req.params.studentId);
     const studentSubmissions = await storage.getSubmissionsByStudent(studentId);
     res.json(studentSubmissions);
   });
 
-  app.post(api.submissions.create.path, async (req, res) => {
+  app.post(api.submissions.create.path, requireAuth, async (req, res) => {
     const input = api.submissions.create.input.parse(req.body);
 
-    // Enforce one active session/submission per student per exam
     const existing = await storage.getSubmissionsByStudent(input.studentId);
     const alreadyExists = existing.some((s) => s.examId === input.examId);
     if (alreadyExists) {
       return res.status(400).json({
-        message:
-          "You already have an active session or submission for this exam.",
+        message: "You already have an active session or submission for this exam.",
       });
     }
 
@@ -435,7 +649,7 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
     res.status(201).json(submission);
   });
 
-  app.patch(api.submissions.update.path, async (req, res) => {
+  app.patch(api.submissions.update.path, requireAuth, async (req, res) => {
     const input = api.submissions.update.input.parse(req.body);
     const submission = await storage.updateSubmission(
       Number(req.params.id),
@@ -445,7 +659,7 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
   });
 
   // Publish Exam
-  app.patch(api.exams.publish.path, async (req, res) => {
+  app.patch(api.exams.publish.path, requireAuth, requireRole("teacher", "admin"), requireActiveTeacher, async (req, res) => {
     const examId = Number(req.params.id);
     const questions = await storage.getQuestions(examId);
 
@@ -459,18 +673,18 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
     res.json(exam);
   });
 
-  app.patch(api.exams.update.path, async (req, res) => {
+  app.patch(api.exams.update.path, requireAuth, requireRole("teacher", "admin"), async (req, res) => {
     const exam = await storage.updateExam(Number(req.params.id), req.body);
     res.json(exam);
   });
 
-  app.delete(api.exams.delete.path, async (req, res) => {
+  app.delete(api.exams.delete.path, requireAuth, requireRole("teacher", "admin"), requireActiveTeacher, async (req, res) => {
     await storage.deleteExam(Number(req.params.id));
     res.json({ success: true });
   });
 
   // Get Submissions by Exam
-  app.get(api.submissions.listByExam.path, async (req, res) => {
+  app.get(api.submissions.listByExam.path, requireAuth, async (req, res) => {
     const submissions = await storage.getSubmissionsByExam(
       Number(req.params.examId),
     );
@@ -484,57 +698,66 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
 }
 
 async function seedDatabase() {
-  const users = await storage.getUsers();
-  if (users.length === 0) {
+  const existingUsers = await storage.getUsers();
+  if (existingUsers.length === 0) {
     console.log("Seeding database...");
+    const { hashPassword, generateProfileCode } = await import("./auth");
 
-    // Seed Users
-    await db.insert(schema.users).values([
-      {
-        username: "admin",
-        name: "System Administrator",
-        role: "admin",
-        avatarUrl: "https://github.com/shadcn.png",
-      },
-      {
-        username: "teacher",
-        name: "Sarah Connor",
-        role: "teacher",
-        avatarUrl: "https://i.pravatar.cc/150?u=teacher",
-      },
-      {
-        username: "student",
-        name: "John Doe",
-        role: "student",
-        avatarUrl: "https://i.pravatar.cc/150?u=student",
-      },
-    ]);
+    // Seed admin (immediately active)
+    const adminHash = await hashPassword("admin123");
+    await storage.createUser({
+      username: "admin",
+      email: "admin@gradeint.app",
+      passwordHash: adminHash,
+      name: "System Administrator",
+      role: "admin",
+      status: "active",
+    });
+
+    // Seed teacher (immediately active for demo — skip pending flow)
+    const teacherHash = await hashPassword("teacher123");
+    const teacherProfileCode = await generateProfileCode();
+    const teacher = await db.insert(schema.users).values({
+      username: "teacher",
+      email: "teacher@gradeint.app",
+      passwordHash: teacherHash,
+      name: "Sarah Connor",
+      role: "teacher",
+      status: "active",
+      profileCode: teacherProfileCode,
+      validatedAt: new Date(),
+      avatarUrl: "https://i.pravatar.cc/150?u=teacher",
+    }).returning().then(r => r[0]);
+
+    // Seed student (active immediately)
+    const studentHash = await hashPassword("student123");
+    await storage.createUser({
+      username: "student",
+      email: "student@gradeint.app",
+      passwordHash: studentHash,
+      name: "John Doe",
+      role: "student",
+      status: "active",
+    });
 
     // Seed Sample Exam
-    const [teacher] = await db
-      .select()
-      .from(schema.users)
-      .where(eq(schema.users.role, "teacher"));
     if (teacher) {
       const exam = await storage.createExam({
         title: "Mid-Term Physics Assessment",
         subject: "Physics",
-        description:
-          "Comprehensive assessment covering mechanics and thermodynamics.",
+        description: "Comprehensive assessment covering mechanics and thermodynamics.",
         durationMinutes: 90,
         teacherId: teacher.id,
         status: "published",
       });
 
-      // Seed Questions
       await storage.createQuestion({
         examId: exam.id,
         text: "Explain Newton's Second Law of Motion.",
         type: "short_answer",
         points: 5,
         order: 1,
-        rubric:
-          "Must mention F=ma and relation between force, mass, and acceleration.",
+        rubric: "Must mention F=ma and relation between force, mass, and acceleration.",
       });
 
       await storage.createQuestion({
@@ -553,11 +776,9 @@ async function seedDatabase() {
         type: "essay",
         points: 10,
         order: 3,
-        rubric:
-          "Discuss temperature dependence and maximum theoretical efficiency.",
+        rubric: "Discuss temperature dependence and maximum theoretical efficiency.",
       });
 
-      // Seed Session
       await storage.createSession({
         examId: exam.id,
         accessCode: "PHYS-2024",
@@ -565,6 +786,10 @@ async function seedDatabase() {
       });
     }
     console.log("Seeding complete.");
+    console.log("Seed credentials:");
+    console.log("  admin   / admin123");
+    console.log("  teacher / teacher123");
+    console.log("  student / student123");
   }
 }
 

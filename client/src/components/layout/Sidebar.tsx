@@ -21,6 +21,7 @@ export function Sidebar({ className }: SidebarProps) {
 
   const teacherLinks = [
     { href: "/teacher", icon: LayoutDashboard, label: "Overview" },
+    { href: "/teacher/students", icon: Users, label: "Students" },
     { href: "/teacher/exams", icon: BookOpen, label: "Exams" },
     { href: "/teacher/grading", icon: GraduationCap, label: "Grading" },
     { href: "/teacher/scoresheet", icon: TableProperties, label: "Score sheet" },

@@ -1,43 +1,63 @@
-import { useState, useEffect } from "react";
-import { type User } from "@shared/schema";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@shared/routes";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { type SafeUser } from "@shared/schema";
 
-// Simple mock auth for prototype
-export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+type AuthResponse = { user: SafeUser };
 
-  // Load user from local storage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem("mock_user");
-    if (stored) {
-      setUser(JSON.parse(stored));
-    }
-    setIsLoading(false);
-  }, []);
-
-  const login = (user: User) => {
-    localStorage.setItem("mock_user", JSON.stringify(user));
-    setUser(user);
-  };
-
-  const logout = () => {
-    localStorage.removeItem("mock_user");
-    setUser(null);
-    window.location.href = "/login";
-  };
-
-  return { user, isLoading, login, logout };
+async function fetchMe(): Promise<SafeUser | null> {
+  const res = await fetch("/api/auth/me", { credentials: "include" });
+  if (res.status === 401) return null;
+  if (!res.ok) throw new Error("Failed to fetch session");
+  const data: AuthResponse = await res.json();
+  return data.user;
 }
 
-export function useUsers() {
-  return useQuery({
-    queryKey: [api.users.list.path],
-    queryFn: async () => {
-      const res = await fetch(api.users.list.path);
-      if (!res.ok) throw new Error("Failed to fetch users");
-      return api.users.list.responses[200].parse(await res.json());
+export function useAuth() {
+  const queryClient = useQueryClient();
+
+  const { data: user, isLoading } = useQuery<SafeUser | null>({
+    queryKey: ["auth", "me"],
+    queryFn: fetchMe,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  const loginMutation = useMutation({
+    mutationFn: async ({ username, password }: { username: string; password: string }) => {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message ?? "Login failed");
+      }
+      const data: AuthResponse = await res.json();
+      return data.user;
+    },
+    onSuccess: (user) => {
+      queryClient.setQueryData(["auth", "me"], user);
     },
   });
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(["auth", "me"], null);
+      queryClient.clear();
+      window.location.href = "/login";
+    },
+  });
+
+  return {
+    user: user ?? null,
+    isLoading,
+    login: loginMutation.mutateAsync,
+    loginError: loginMutation.error?.message,
+    isLoggingIn: loginMutation.isPending,
+    logout: () => logoutMutation.mutate(),
+  };
 }

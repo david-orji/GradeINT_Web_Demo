@@ -2,7 +2,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
-import { Play, Clock, CheckCircle, FileText, BadgeInfo } from "lucide-react";
+import { Play, Clock, CheckCircle, FileText, BookOpen } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useSessions } from "@/hooks/use-sessions";
 import { useLocation } from "wouter";
@@ -96,6 +96,9 @@ export default function StudentDashboard() {
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-slate-600" data-testid="text-username">{user?.name}</span>
+          <Button variant="outline" size="sm" onClick={() => setLocation("/student/teachers")} className="gap-1.5">
+            <BookOpen className="w-4 h-4" /> My Teachers
+          </Button>
           <Button variant="outline" size="sm" onClick={logout} data-testid="button-sign-out">Sign Out</Button>
         </div>
       </nav>

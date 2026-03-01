@@ -1,30 +1,36 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useAuth, useUsers } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShieldCheck } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ShieldCheck, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { login } = useAuth();
-  const { data: users, isLoading } = useUsers();
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const { login, isLoggingIn } = useAuth();
 
-  const handleLogin = () => {
-    const user = users?.find(u => u.id.toString() === selectedUserId);
-    if (!user) return;
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    login(user);
-
-    // Redirect based on role
-    if (user.role === "student") {
-      setLocation("/student/dashboard");
-    } else if (user.role === "admin") {
-      setLocation("/admin");
-    } else {
-      setLocation("/teacher");
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      const user = await login({ username, password });
+      if (user.role === "student") {
+        setLocation("/student/dashboard");
+      } else if (user.role === "admin") {
+        setLocation("/admin");
+      } else {
+        setLocation("/teacher");
+      }
+    } catch (err: any) {
+      setError(err.message ?? "Login failed. Check your credentials.");
     }
   };
 
@@ -45,40 +51,79 @@ export default function Login() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-semibold text-center">Sign in</CardTitle>
           <CardDescription className="text-center">
-            Select a demo account to continue
+            Enter your credentials to continue
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Select User Role</label>
-            <Select onValueChange={setSelectedUserId} value={selectedUserId}>
-              <SelectTrigger className="w-full h-11 bg-white border-slate-200">
-                <SelectValue placeholder="Choose a user..." />
-              </SelectTrigger>
-              <SelectContent>
-                {isLoading ? (
-                  <div className="p-2 text-sm text-slate-500">Loading users...</div>
-                ) : (
-                  users?.map((user) => (
-                    <SelectItem key={user.id} value={user.id.toString()}>
-                      <span className="font-medium">{user.name}</span>
-                      <span className="ml-2 text-xs text-slate-500 capitalize">({user.role})</span>
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button
-            className="w-full h-11 text-base bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/10"
-            onClick={handleLogin}
-            disabled={!selectedUserId}
-          >
-            Access Dashboard
-          </Button>
-        </CardFooter>
+
+        <form onSubmit={handleLogin}>
+          <CardContent className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="Enter your username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                autoComplete="username"
+                className="h-11"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  className="h-11 pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </CardContent>
+
+          <CardFooter className="flex flex-col gap-3">
+            <Button
+              type="submit"
+              className="w-full h-11 text-base bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/10"
+              disabled={isLoggingIn || !username || !password}
+            >
+              {isLoggingIn ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Sign In
+            </Button>
+
+            <p className="text-sm text-center text-slate-500">
+              Don't have an account?{" "}
+              <button
+                type="button"
+                onClick={() => setLocation("/signup")}
+                className="text-blue-600 hover:underline font-medium"
+              >
+                Sign up
+              </button>
+            </p>
+          </CardFooter>
+        </form>
       </Card>
 
       <p className="mt-8 text-xs text-slate-400 text-center max-w-xs">

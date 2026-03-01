@@ -1,7 +1,7 @@
 import { db } from "./db";
 import {
-  users, exams, questions, examSessions, submissions,
-  type User, type Exam, type Question, type ExamSession, type Submission,
+  users, exams, questions, examSessions, submissions, teacherStudentLinks,
+  type User, type TeacherStudentLink, type Exam, type Question, type ExamSession, type Submission,
   type CreateExamRequest, type CreateQuestionRequest, type CreateSessionRequest,
   type CreateSubmissionRequest, type UpdateSubmissionRequest
 } from "@shared/schema";
@@ -12,6 +12,26 @@ export interface IStorage {
   getUsers(): Promise<User[]>;
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByProfileCode(code: string): Promise<User | undefined>;
+  createUser(data: {
+    username: string;
+    email: string;
+    passwordHash: string;
+    name: string;
+    role: "teacher" | "student" | "admin";
+    institution?: string;
+    status: "active" | "pending";
+  }): Promise<User>;
+  getPendingTeachers(): Promise<User[]>;
+  validateTeacher(id: number, approve: boolean): Promise<User>;
+
+  // Teacher-Student Links
+  createLink(teacherId: number, studentId: number): Promise<TeacherStudentLink>;
+  getLinksByTeacher(teacherId: number): Promise<TeacherStudentLink[]>;
+  getLinksByStudent(studentId: number): Promise<TeacherStudentLink[]>;
+  getLinkByTeacherAndStudent(teacherId: number, studentId: number): Promise<TeacherStudentLink | undefined>;
+  updateLink(id: number, status: "accepted" | "declined"): Promise<TeacherStudentLink>;
 
   // Exams
   getExams(teacherId?: number): Promise<Exam[]>;
@@ -40,6 +60,9 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+
+  // ── Users ─────────────────────────────────────────────────────────────────
+
   async getUsers(): Promise<User[]> {
     return await db.select().from(users);
   }
@@ -53,6 +76,97 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(users).where(eq(users.username, username));
     return user;
   }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async getUserByProfileCode(code: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.profileCode, code));
+    return user;
+  }
+
+  async createUser(data: {
+    username: string;
+    email: string;
+    passwordHash: string;
+    name: string;
+    role: "teacher" | "student" | "admin";
+    institution?: string;
+    status: "active" | "pending";
+  }): Promise<User> {
+    const [user] = await db.insert(users).values(data).returning();
+    return user;
+  }
+
+  async getPendingTeachers(): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(and(eq(users.role, "teacher"), eq(users.status, "pending")));
+  }
+
+  async validateTeacher(id: number, approve: boolean): Promise<User> {
+    const { generateProfileCode } = await import("./auth");
+    const updates: Partial<User> = approve
+      ? { status: "active", validatedAt: new Date(), profileCode: await generateProfileCode() }
+      : { status: "suspended" };
+
+    const [updated] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+    if (!updated) throw new Error("Teacher not found");
+    return updated;
+  }
+
+  // ── Teacher-Student Links ─────────────────────────────────────────────────
+
+  async createLink(teacherId: number, studentId: number): Promise<TeacherStudentLink> {
+    const [link] = await db
+      .insert(teacherStudentLinks)
+      .values({ teacherId, studentId })
+      .returning();
+    return link;
+  }
+
+  async getLinksByTeacher(teacherId: number): Promise<TeacherStudentLink[]> {
+    return await db
+      .select()
+      .from(teacherStudentLinks)
+      .where(eq(teacherStudentLinks.teacherId, teacherId))
+      .orderBy(desc(teacherStudentLinks.requestedAt));
+  }
+
+  async getLinksByStudent(studentId: number): Promise<TeacherStudentLink[]> {
+    return await db
+      .select()
+      .from(teacherStudentLinks)
+      .where(eq(teacherStudentLinks.studentId, studentId));
+  }
+
+  async getLinkByTeacherAndStudent(teacherId: number, studentId: number): Promise<TeacherStudentLink | undefined> {
+    const [link] = await db
+      .select()
+      .from(teacherStudentLinks)
+      .where(
+        and(
+          eq(teacherStudentLinks.teacherId, teacherId),
+          eq(teacherStudentLinks.studentId, studentId)
+        )
+      );
+    return link;
+  }
+
+  async updateLink(id: number, status: "accepted" | "declined"): Promise<TeacherStudentLink> {
+    const [updated] = await db
+      .update(teacherStudentLinks)
+      .set({ status, respondedAt: new Date() })
+      .where(eq(teacherStudentLinks.id, id))
+      .returning();
+    if (!updated) throw new Error("Link not found");
+    return updated;
+  }
+
+  // ── Exams ─────────────────────────────────────────────────────────────────
 
   async getExams(teacherId?: number): Promise<Exam[]> {
     if (teacherId) {
@@ -68,18 +182,13 @@ export class DatabaseStorage implements IStorage {
 
   async createExam(exam: CreateExamRequest): Promise<Exam> {
     const { questions: questionsData, ...examFields } = exam as any;
-    // Access code is generated only when the exam is published.
-    // Use a unique draft placeholder to satisfy the NOT NULL + UNIQUE DB constraint.
     const draftPlaceholder = `DRAFT-${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
     const [newExam] = await db.insert(exams).values({ ...examFields, accessCode: draftPlaceholder }).returning();
     console.log(`Created new exam with ID: ${newExam.id}`);
 
-    // If questions are provided, add them
     if (questionsData && Array.isArray(questionsData) && questionsData.length > 0) {
-      console.log(`Adding ${questionsData.length} questions to exam ${newExam.id}`);
       for (let i = 0; i < questionsData.length; i++) {
         const q = questionsData[i];
-        console.log(`Inserting question ${i + 1} for exam ${newExam.id}: ${q.text}`);
         await db.insert(questions).values({
           examId: newExam.id,
           text: q.text,
@@ -92,7 +201,6 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Auto-create session only for exams seeded as already-published (e.g. seed data)
     if (examFields.status === "published") {
       const accessCode = this.generateAccessCode();
       await db.update(exams).set({ accessCode }).where(eq(exams.id, newExam.id));
@@ -122,7 +230,6 @@ export class DatabaseStorage implements IStorage {
   async updateExam(id: number, updates: Partial<CreateExamRequest>): Promise<Exam> {
     const { questions: questionsData, ...examFields } = updates as any;
 
-    // If we're closing the exam, also mark associated sessions as completed
     if (examFields.status === "closed") {
       await db.update(examSessions)
         .set({ status: "completed", endTime: new Date() })
@@ -137,7 +244,6 @@ export class DatabaseStorage implements IStorage {
     if (!updated) throw new Error("Exam not found");
 
     if (questionsData && Array.isArray(questionsData) && questionsData.length > 0) {
-      console.log(`Updating ${questionsData.length} questions for exam ${id}`);
       await db.delete(questions).where(eq(questions.examId, id));
       for (let i = 0; i < questionsData.length; i++) {
         const q = questionsData[i];
@@ -162,15 +268,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async publishExam(id: number): Promise<Exam> {
-    // Generate the access code only now, at publish time
     const accessCode = this.generateAccessCode();
-
     const [updated] = await db.update(exams)
       .set({ status: "published", accessCode })
       .where(eq(exams.id, id))
       .returning();
 
-    // Create an active session with the freshly generated access code
     await db.insert(examSessions).values({
       examId: updated.id,
       accessCode: accessCode,
@@ -179,6 +282,8 @@ export class DatabaseStorage implements IStorage {
 
     return updated;
   }
+
+  // ── Questions ─────────────────────────────────────────────────────────────
 
   async getQuestions(examId: number): Promise<Question[]> {
     return await db.select().from(questions).where(eq(questions.examId, examId)).orderBy(questions.order);
@@ -192,6 +297,8 @@ export class DatabaseStorage implements IStorage {
     return newQuestion;
   }
 
+  // ── Sessions ──────────────────────────────────────────────────────────────
+
   async getSessions(examId?: number): Promise<ExamSession[]> {
     if (examId) {
       return await db.select().from(examSessions).where(eq(examSessions.examId, examId)).orderBy(desc(examSessions.startTime));
@@ -204,13 +311,15 @@ export class DatabaseStorage implements IStorage {
     return session;
   }
 
-  async getSubmissions(sessionId: number): Promise<Submission[]> {
-    return await db.select().from(submissions).where(eq(submissions.sessionId, sessionId));
-  }
-
   async createSession(session: CreateSessionRequest): Promise<ExamSession> {
     const [newSession] = await db.insert(examSessions).values(session).returning();
     return newSession;
+  }
+
+  // ── Submissions ───────────────────────────────────────────────────────────
+
+  async getSubmissions(sessionId: number): Promise<Submission[]> {
+    return await db.select().from(submissions).where(eq(submissions.sessionId, sessionId));
   }
 
   async getSubmissionsByExam(examId: number): Promise<Submission[]> {

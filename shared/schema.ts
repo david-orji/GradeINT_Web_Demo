@@ -4,13 +4,30 @@ import { z } from "zod";
 
 // === TABLE DEFINITIONS ===
 
-// Mock users for the prototype (no real auth)
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
   role: text("role", { enum: ["admin", "teacher", "student", "invigilator"] }).notNull(),
+  institution: text("institution"),
+  // Generated for teachers at validation time (null until admin validates)
+  profileCode: text("profile_code").unique(),
+  // Teachers start "pending"; students and admins start "active"
+  status: text("status", { enum: ["active", "pending", "suspended"] }).notNull().default("active"),
+  validatedAt: timestamp("validated_at"),
   avatarUrl: text("avatar_url"),
+});
+
+// Teacher–Student link requests
+export const teacherStudentLinks = pgTable("teacher_student_links", {
+  id: serial("id").primaryKey(),
+  teacherId: integer("teacher_id").notNull(),
+  studentId: integer("student_id").notNull(),
+  status: text("status", { enum: ["pending", "accepted", "declined"] }).notNull().default("pending"),
+  requestedAt: timestamp("requested_at").defaultNow(),
+  respondedAt: timestamp("responded_at"),
 });
 
 export const exams = pgTable("exams", {
@@ -68,6 +85,22 @@ export const submissions = pgTable("submissions", {
 // === SCHEMAS ===
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
+
+// Schema for public registration (subset of user fields)
+export const registerSchema = z.object({
+  username: z.string().min(3).max(50),
+  email: z.string().email(),
+  password: z.string().min(8),
+  name: z.string().min(2),
+  role: z.enum(["teacher", "student"]),
+  institution: z.string().optional(),
+});
+
+export const loginSchema = z.object({
+  username: z.string(),
+  password: z.string(),
+});
+
 export const insertExamSchema = createInsertSchema(exams).omit({ id: true, createdAt: true, updatedAt: true, accessCode: true });
 export const insertQuestionSchema = createInsertSchema(questions).omit({ id: true });
 export const insertSessionSchema = createInsertSchema(examSessions).omit({ id: true, startTime: true, endTime: true });
@@ -76,11 +109,14 @@ export const insertSubmissionSchema = createInsertSchema(submissions).omit({ id:
 // === TYPES ===
 
 export type User = typeof users.$inferSelect;
+export type TeacherStudentLink = typeof teacherStudentLinks.$inferSelect;
 export type Exam = typeof exams.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type ExamSession = typeof examSessions.$inferSelect;
 export type Submission = typeof submissions.$inferSelect;
 
+export type RegisterRequest = z.infer<typeof registerSchema>;
+export type LoginRequest = z.infer<typeof loginSchema>;
 export type CreateExamRequest = z.infer<typeof insertExamSchema>;
 export type CreateQuestionRequest = z.infer<typeof insertQuestionSchema>;
 export type CreateSessionRequest = z.infer<typeof insertSessionSchema>;
@@ -88,5 +124,8 @@ export type CreateSubmissionRequest = z.infer<typeof insertSubmissionSchema>;
 export type UpdateSubmissionRequest = Partial<Submission>;
 
 export type UpdateExamRequest = { status: "published" | "archived" };
+
+// Safe user type – never expose passwordHash to the client
+export type SafeUser = Omit<User, "passwordHash">;
 
 export * from "./models/chat";

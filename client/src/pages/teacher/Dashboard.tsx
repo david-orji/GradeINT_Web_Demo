@@ -19,40 +19,40 @@ export default function TeacherDashboard() {
   return (
     <div className="flex h-screen bg-slate-50">
       <Sidebar />
-      
+
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-8 py-8">
           <header className="mb-8">
             <h1 className="text-2xl font-display font-bold text-slate-900">Dashboard Overview</h1>
-            <p className="text-slate-500 mt-1">Welcome back, Professor {user?.name.split(" ")[1]}.</p>
+            <p className="text-slate-500 mt-1">Welcome back, {user?.name ?? "Professor"}.</p>
           </header>
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <StatCard 
-              title="Active Sessions" 
-              value={activeSessions} 
-              icon={Clock} 
+            <StatCard
+              title="Active Sessions"
+              value={activeSessions}
+              icon={Clock}
               colorClass="bg-green-100 text-green-700"
               trend="+2"
               trendUp={true}
             />
-            <StatCard 
-              title="Total Exams" 
-              value={exams?.length || 0} 
-              icon={FileText} 
+            <StatCard
+              title="Total Exams"
+              value={exams?.length || 0}
+              icon={FileText}
               colorClass="bg-blue-100 text-blue-700"
             />
-            <StatCard 
-              title="Pending Drafts" 
-              value={draftExams} 
-              icon={FileText} 
+            <StatCard
+              title="Pending Drafts"
+              value={draftExams}
+              icon={FileText}
               colorClass="bg-amber-100 text-amber-700"
             />
-            <StatCard 
-              title="Students Graded" 
-              value="142" 
-              icon={CheckCircle} 
+            <StatCard
+              title="Students Graded"
+              value="142"
+              icon={CheckCircle}
               colorClass="bg-purple-100 text-purple-700"
             />
           </div>
@@ -72,11 +72,10 @@ export default function TeacherDashboard() {
                       <h4 className="font-medium text-slate-900">{exam.title}</h4>
                       <p className="text-xs text-slate-500 mt-0.5">{exam.subject} • {exam.durationMinutes} mins</p>
                     </div>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                      exam.status === "published" ? "bg-green-50 text-green-700 border-green-200" :
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${exam.status === "published" ? "bg-green-50 text-green-700 border-green-200" :
                       exam.status === "draft" ? "bg-slate-100 text-slate-600 border-slate-200" :
-                      "bg-amber-50 text-amber-700 border-amber-200"
-                    }`}>
+                        "bg-amber-50 text-amber-700 border-amber-200"
+                      }`}>
                       {exam.status}
                     </span>
                   </div>
@@ -91,7 +90,7 @@ export default function TeacherDashboard() {
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
               <h3 className="font-semibold text-slate-800 mb-4">Quick Actions</h3>
               <div className="grid grid-cols-2 gap-4">
-                <Button 
+                <Button
                   variant="ghost"
                   onClick={() => setLocation("/teacher/exams?create=true")}
                   className="flex flex-col items-center justify-center p-4 h-auto border border-dashed border-slate-300 rounded-lg hover:bg-slate-50 hover:border-blue-300 hover:text-blue-600 transition-all group"
@@ -101,7 +100,7 @@ export default function TeacherDashboard() {
                   </div>
                   <span className="text-sm font-medium">Create New Exam</span>
                 </Button>
-                <Button 
+                <Button
                   variant="ghost"
                   className="flex flex-col items-center justify-center p-4 h-auto border border-dashed border-slate-300 rounded-lg hover:bg-slate-50 hover:border-purple-300 hover:text-purple-600 transition-all group"
                 >
