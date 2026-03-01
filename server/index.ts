@@ -2,9 +2,7 @@ import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import MemoryStore from "memorystore";
-// connect-redis v9 — default export is RedisStore
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const RedisStore = (require("connect-redis")).default ?? require("connect-redis");
+import { RedisStore } from "connect-redis";
 import { createClient } from "redis";
 
 import { registerRoutes } from "./routes";
