@@ -50,6 +50,10 @@ export default function Signup() {
                 credentials: "include",
             });
 
+            const contentType = res.headers.get("content-type") ?? "";
+            if (!contentType.includes("application/json")) {
+                throw new Error("Server error. Please try again later.");
+            }
             const data = await res.json();
             if (!res.ok) {
                 setError(data.message ?? "Registration failed");
@@ -151,8 +155,8 @@ export default function Signup() {
                                         key={value}
                                         htmlFor={`role-${value}`}
                                         className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-colors ${role === value
-                                                ? "border-blue-600 bg-blue-50 text-blue-700"
-                                                : "border-slate-200 hover:border-slate-300 text-slate-600"
+                                            ? "border-blue-600 bg-blue-50 text-blue-700"
+                                            : "border-slate-200 hover:border-slate-300 text-slate-600"
                                             }`}
                                     >
                                         <RadioGroupItem value={value} id={`role-${value}`} className="sr-only" />

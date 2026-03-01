@@ -1,12 +1,15 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
-import { Pool } from "pg";
+import MemoryStore from "memorystore";
+import Redis from "ioredis";
+import { RedisStore } from "connect-redis";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { setupPassport } from "./auth";
 import { createServer } from "http";
+
+
 
 const app = express();
 const httpServer = createServer(app);
@@ -27,13 +30,23 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-// ── Session store ──────────────────────────────────────────────────────────
-const PgSession = connectPgSimple(session);
-const pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+function buildSessionStore() {
+
+  if (process.env.REDIS_URL) {
+    const client = new Redis(process.env.REDIS_URL);
+    client.on("error", (err: Error) => console.error("Redis error:", err));
+
+    return new RedisStore({ client });
+  }
+  // Local dev fallback — no Redis required
+  const MemoryStoreSession = MemoryStore(session);
+  return new MemoryStoreSession({ checkPeriod: 86400000 });
+}
 
 app.use(
   session({
-    store: new PgSession({ pool: pgPool, tableName: "user_sessions" }),
+    store: buildSessionStore(),
     secret: process.env.SESSION_SECRET ?? "gradeint-dev-secret-change-in-prod",
     resave: false,
     saveUninitialized: false,
