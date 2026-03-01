@@ -2,7 +2,7 @@ import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import MemoryStore from "memorystore";
-import Redis from "ioredis";
+import { createClient } from "redis";
 import { RedisStore } from "connect-redis";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -35,11 +35,10 @@ app.use(express.urlencoded({ extended: false }));
 
 
 function buildSessionStore() {
-
   if (process.env.REDIS_URL) {
-    const client = new Redis(process.env.REDIS_URL);
+    const client = createClient({ url: process.env.REDIS_URL });
     client.on("error", (err: Error) => console.error("Redis error:", err));
-
+    client.connect().catch((err: Error) => console.error("Redis connect error:", err));
     return new RedisStore({ client });
   }
   // Local dev fallback — no Redis required
