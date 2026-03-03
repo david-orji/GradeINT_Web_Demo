@@ -544,7 +544,14 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
   // ═══════════════════════════════════════════════════════════════════════════
 
   // Users
-  app.get(api.users.list.path, requireAuth, requireRole("admin"), async (req, res) => {
+  app.get(api.users.list.path, requireAuth, async (req, res) => {
+    // Both admin and teacher need access to map user IDs to names. 
+    // Admin needs all users. Teacher technically only needs their linked students,
+    // but returning sanitized users is safe here for the MVP.
+    const user = req.user as any;
+    if (user.role !== "admin" && user.role !== "teacher") {
+      return res.status(403).json({ message: "Access denied" });
+    }
     const users = await storage.getUsers();
     res.json(users.map(sanitizeUser));
   });
