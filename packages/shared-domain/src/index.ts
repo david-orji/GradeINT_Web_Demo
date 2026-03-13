@@ -7,7 +7,7 @@ import type { ExamPackage } from '@gradeint/shared-types';
 
 // --- Exam lifecycle rules ----------------------------------------------------
 
-export type ExamStatus = 'draft' | 'published' | 'archived';
+export type ExamStatus = 'draft' | 'published' | 'closed';
 
 /**
  * An exam can only be published if it has at least one question.
@@ -20,7 +20,7 @@ export function canPublishExam(exam: { questions: unknown[] }): boolean {
  * A published exam is immutable. No edits are allowed.
  */
 export function isExamImmutable(status: ExamStatus): boolean {
-  return status === 'published' || status === 'archived';
+  return status === 'published' || status === 'closed';
 }
 
 // --- Session activation rules ------------------------------------------------

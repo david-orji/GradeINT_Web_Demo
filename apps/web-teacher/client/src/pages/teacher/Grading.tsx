@@ -69,6 +69,21 @@ export default function GradingPage() {
     }
   });
 
+  const gradeMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/submissions/${id}/grade`, {});
+      if (!res.ok) throw new Error("Failed to grade submission");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.submissions.listByExam.path, selectedExamId] });
+      toast({ title: "Grading started", description: "Submission is being graded." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Grading failed", description: err.message, variant: "destructive" });
+    }
+  });
+
   const gradeAllMutation = useMutation({
     mutationFn: async (examId: number) => {
       const res = await apiRequest("POST", `/api/exams/${examId}/grade-all`, {});

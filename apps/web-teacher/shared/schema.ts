@@ -38,7 +38,7 @@ export const exams = pgTable("exams", {
   durationMinutes: integer("duration_minutes").notNull().default(60),
   teacherId: integer("teacher_id").notNull(),
   accessCode: text("access_code").notNull().unique(),
-  status: text("status", { enum: ["draft", "published", "closed", "archived"] }).notNull().default("draft"),
+  status: text("status", { enum: ["draft", "published", "closed"] }).notNull().default("draft"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -123,7 +123,7 @@ export type CreateSessionRequest = z.infer<typeof insertSessionSchema>;
 export type CreateSubmissionRequest = z.infer<typeof insertSubmissionSchema>;
 export type UpdateSubmissionRequest = Partial<Submission>;
 
-export type UpdateExamRequest = { status: "published" | "archived" };
+export type UpdateExamRequest = { status: "published" | "closed" };
 
 // Safe user type – never expose passwordHash to the client
 export type SafeUser = Omit<User, "passwordHash">;

@@ -11,7 +11,11 @@ import {
   registerSchema,
   loginSchema,
   type Question,
+  type ExamSession,
 } from "@shared/schema";
+import { isExamImmutable, canActivateSession } from "@gradeint/shared-domain";
+import { checksumObject } from "@gradeint/shared-utils";
+import type { ExamPackage, SubmissionEnvelope } from "@gradeint/shared-types";
 import { hashPassword, sanitizeUser } from "./auth";
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -711,12 +715,31 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
   });
 
   app.patch(api.exams.update.path, requireAuth, requireRole("teacher", "admin"), async (req, res) => {
-    const exam = await storage.updateExam(Number(req.params.id), req.body);
+    const examId = Number(req.params.id);
+    const existing = await storage.getExam(examId);
+    if (!existing) return res.status(404).json({ message: "Exam not found" });
+
+    if (isExamImmutable(existing.status as any)) {
+      // Allow closing a published exam, but block all other edits
+      if (req.body.status !== "closed" || Object.keys(req.body).length > 1) {
+        return res.status(400).json({ message: "Cannot modify a published or closed exam." });
+      }
+    }
+
+    const exam = await storage.updateExam(examId, req.body);
     res.json(exam);
   });
 
   app.delete(api.exams.delete.path, requireAuth, requireRole("teacher", "admin"), requireActiveTeacher, async (req, res) => {
-    await storage.deleteExam(Number(req.params.id));
+    const examId = Number(req.params.id);
+    const existing = await storage.getExam(examId);
+    if (!existing) return res.status(404).json({ message: "Exam not found" });
+
+    if (isExamImmutable(existing.status as any)) {
+      return res.status(400).json({ message: "Cannot delete a published or closed exam." });
+    }
+
+    await storage.deleteExam(examId);
     res.json({ success: true });
   });
 
@@ -726,6 +749,175 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
       Number(req.params.examId),
     );
     res.json(submissions);
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LOCAL SERVER INTEGRATION (LAN API)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** POST /api/lan/auth — Local Server operator login */
+  app.post("/api/lan/auth", async (req, res) => {
+    // MVP: Local server operator uses a teacher account to authenticate the server
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid credentials" });
+
+    const user = await storage.getUserByUsername(parsed.data.username);
+    if (!user || user.role !== "teacher" || user.status !== "active") {
+      return res.status(401).json({ message: "Invalid or unauthorized operator credentials" });
+    }
+
+    const { verifyPassword } = await import("./auth");
+    const valid = await verifyPassword(parsed.data.password, user.passwordHash);
+    if (!valid) return res.status(401).json({ message: "Invalid credentials" });
+
+    res.json({ success: true, operator: sanitizeUser(user) });
+  });
+
+  /** GET /api/lan/exams/:accessCode — Download immutable ExamPackage */
+  app.get("/api/lan/exams/:accessCode", async (req, res) => {
+    const accessCode = req.params.accessCode;
+    // We need a custom storage query for accessCode since getExam relies on ID
+    const { exams } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const { db } = await import("./db");
+    
+    const [exam] = await db.select().from(exams).where(eq(exams.accessCode, accessCode));
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+
+    if (exam.status !== "published" && exam.status !== "closed") {
+      return res.status(400).json({ message: "Exam is not published" });
+    }
+
+    const dbQuestions = await storage.getQuestions(exam.id);
+    
+    // Omit sensitive data (answers/rubrics)
+    const questions = dbQuestions.map(q => {
+      let mappedType: 'mcq' | 'multi-select' | 'short-answer' | 'essay' = 'short-answer';
+      if (q.type === 'multiple_choice') mappedType = 'mcq';
+      else if (q.type === 'essay') mappedType = 'essay';
+
+      return {
+        questionId: q.id.toString(),
+        text: q.text,
+        type: mappedType,
+        options: q.options ? q.options.map((opt, i) => ({
+          optionId: `opt-${q.id}-${i}`,
+          order: i + 1,
+          text: opt
+        })) : undefined,
+        points: q.points,
+        order: q.order,
+        required: true,
+      };
+    });
+
+    const packageData: Omit<ExamPackage, 'checksum'> = {
+      examId: exam.id.toString(),
+      packageVersion: "1.0.0",
+      generatedAt: new Date().toISOString(),
+      title: exam.title,
+      instructions: exam.description || "",
+      duration: exam.durationMinutes * 60, // Convert minutes to seconds
+      questions,
+      sessionMetadata: {
+        sessionId: "",                // Local server assigns on activation
+        scheduledStartAt: new Date().toISOString(),
+        scheduledEndAt: new Date().toISOString(),
+        allowedCandidateIds: [],
+        maxAttempts: 1,
+      },
+      activationConfig: {
+        requireLocalAuth: false,
+        autoSealOnTimerExpiry: true,
+        autosaveIntervalSeconds: 60,
+      }
+    };
+
+    const pkg: ExamPackage = {
+      ...packageData,
+      checksum: await checksumObject(packageData),
+    };
+
+    res.json(pkg);
+  });
+
+  /** POST /api/lan/sessions/activate — Notify cloud that session is starting locally */
+  app.post("/api/lan/sessions/activate", async (req, res) => {
+    const { accessCode, checksumVerified, questionCount } = req.body;
+    
+    const { exams } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const { db } = await import("./db");
+    const [exam] = await db.select().from(exams).where(eq(exams.accessCode, accessCode));
+    
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+
+    const rules = canActivateSession({
+      examStatus: exam.status as any,
+      packageChecksumVerified: Boolean(checksumVerified),
+      questionCount: Number(questionCount || 0)
+    });
+
+    if (!rules.allowed) {
+      return res.status(400).json({ message: rules.reason });
+    }
+
+    // We assume the local server has genuinely activated it.
+    // In a real system, we'd record the session activation time here.
+    res.json({ success: true, examId: exam.id });
+  });
+
+  /** POST /api/lan/sync/submissions — Receive batch of submissions from Local Server */
+  app.post("/api/lan/sync/submissions", async (req, res) => {
+    const envelopes: SubmissionEnvelope[] = req.body.submissions || [];
+    if (!Array.isArray(envelopes)) return res.status(400).json({ message: "Invalid payload format" });
+
+    const results = [];
+    for (const env of envelopes) {
+      try {
+        // Verify checksum
+        const { checksum, ...data } = env;
+        if (await checksumObject(data) !== checksum) {
+          throw new Error("Checksum mismatch — data corrupted");
+        }
+
+        // Upsert logic: if student already has a submission for this session, update it.
+        // For MVP, we'll try to find by studentId + examId
+        const existing = await storage.getSubmissionByStudentAndExam(
+          Number(env.studentId), 
+          Number(env.examId)
+        );
+
+        if (existing) {
+          // If the cloud already has it marked as graded/submitted, and this is just an autosave, we might skip
+          // But if this is a final seal, we always overwrite.
+          await storage.updateSubmission(existing.id, {
+            responses: env.answers as any,
+            status: env.submissionState === 'sealed' ? 'submitted' : 'in_progress',
+          });
+          results.push({ studentId: env.studentId, status: "updated" });
+        } else {
+          // Note: we need a dummy sessionId if the cloud doesn't have an active session for it
+          // In Phase 0 we defined that the Local Server creates sessions, but the cloud also has `exam_sessions`.
+          // For MVP, we attach it to the first session found for the exam.
+          const sessions = await storage.getSessions(Number(env.examId));
+          const targetSessionId = sessions.length > 0 ? sessions[0].id : 0; // 0 is a fallback
+
+          await storage.createSubmission({
+            sessionId: targetSessionId,
+            studentId: Number(env.studentId),
+            examId: Number(env.examId),
+            status: env.submissionState === 'sealed' ? 'submitted' : 'in_progress',
+            responses: env.answers as any,
+          });
+          results.push({ studentId: env.studentId, status: "created" });
+        }
+      } catch (err: any) {
+        results.push({ studentId: env.studentId, status: "error", message: err.message });
+      }
+    }
+
+    res.json({ success: true, synced: results.length, details: results });
   });
 
   // === SEED DATA ===

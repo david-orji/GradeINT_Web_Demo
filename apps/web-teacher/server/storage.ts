@@ -6,6 +6,7 @@ import {
   type CreateSubmissionRequest, type UpdateSubmissionRequest
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { isExamImmutable } from "@gradeint/shared-domain";
 
 export interface IStorage {
   // Users
@@ -242,6 +243,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateExam(id: number, updates: Partial<CreateExamRequest>): Promise<Exam> {
+    const existing = await this.getExam(id);
+    if (!existing) throw new Error("Exam not found");
+
+    if (isExamImmutable(existing.status as any)) {
+      if (updates.status !== "closed" || Object.keys(updates).length > 1) {
+        throw new Error("Cannot modify a published or closed exam at the storage layer.");
+      }
+    }
+
     const { questions: questionsData, ...examFields } = updates as any;
 
     if (examFields.status === "closed") {
@@ -277,6 +287,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteExam(id: number): Promise<void> {
+    const existing = await this.getExam(id);
+    if (existing && isExamImmutable(existing.status as any)) {
+      throw new Error("Cannot delete a published or closed exam at the storage layer.");
+    }
     await db.delete(questions).where(eq(questions.examId, id));
     await db.delete(exams).where(eq(exams.id, id));
   }
