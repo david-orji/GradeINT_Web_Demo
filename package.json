@@ -1,16 +1,19 @@
 {
-  "name": "rest-express",
-  "version": "1.0.0",
+  "name": "gradeint",
+  "version": "0.1.0",
+  "private": true,
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "cross-env NODE_ENV=development tsx server/index.ts",
-    "build": "tsx script/build.ts",
-    "start": "node dist/migrate.cjs && NODE_ENV=production node dist/index.cjs",
-    "check": "tsc",
-    "db:push": "drizzle-kit push --force",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx server/migrate.ts"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "check": "turbo run check",
+    "web:dev": "pnpm --filter @gradeint/web-teacher dev",
+    "web:build": "pnpm --filter @gradeint/web-teacher build",
+    "web:start": "pnpm --filter @gradeint/web-teacher start",
+    "web:db:push": "pnpm --filter @gradeint/web-teacher db:push",
+    "web:db:generate": "pnpm --filter @gradeint/web-teacher db:generate",
+    "web:db:migrate": "pnpm --filter @gradeint/web-teacher db:migrate"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -88,6 +91,7 @@
     "zod-validation-error": "^3.5.4"
   },
   "devDependencies": {
+    "turbo": "^2.0.0",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.18",
     "@types/connect-pg-simple": "^7.0.3",
