@@ -1,0 +1,54 @@
+[
+  {
+    "examId": 1,
+    "studentId": "STU-123",
+    "submissionState": "submitted",
+    "answers": [
+      {
+        "questionId": "1",
+        "textAnswer": "Something about conservation of momentum",
+        "lastModifiedAt": "2026-03-14T13:58:04.665Z"
+      },
+      {
+        "questionId": "2",
+        "selectedOptionIds": [
+          "opt-2-0"
+        ],
+        "lastModifiedAt": "2026-03-14T13:58:15.472Z"
+      },
+      {
+        "questionId": "3",
+        "textAnswer": "I`m sorry",
+        "lastModifiedAt": "2026-03-14T13:58:12.782Z"
+      }
+    ],
+    "checksum": "56c7cc315ea8435566aa84c3209d1cc1221a4b75d84791c5fb92cb85257168ce"
+  },
+  {
+    "examId": 3,
+    "studentId": "John Doe",
+    "submissionState": "submitted",
+    "answers": [
+      {
+        "questionId": "6",
+        "selectedOptionIds": [
+          "opt-6-2"
+        ],
+        "lastModifiedAt": "2026-03-14T14:25:14.961Z"
+      },
+      {
+        "questionId": "7",
+        "textAnswer": "The earth is round, precisely a geiod",
+        "lastModifiedAt": "2026-03-14T14:25:32.344Z"
+      },
+      {
+        "questionId": "8",
+        "selectedOptionIds": [
+          "opt-8-0"
+        ],
+        "lastModifiedAt": "2026-03-14T14:25:36.775Z"
+      }
+    ],
+    "checksum": "729855075d696fc7673b38347521999e9ddd907fd5f88811345b365d1ef3ebc3"
+  }
+]
