@@ -9,11 +9,19 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { setupPassport } from "./auth";
 import { createServer } from "http";
-
-
+import cors from "cors";
 
 const app = express();
 const httpServer = createServer(app);
+
+// Allow Cross-Origin requests from the Tauri Desktop App or local dev environment
+app.use(cors({
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Allow all origins (including tauri://localhost, http://tauri.localhost, etc.)
+    callback(null, true);
+  },
+  credentials: true
+}));
 
 // Trust Railway's reverse proxy so secure cookies work over HTTPS
 app.set("trust proxy", 1);
