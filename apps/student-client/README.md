@@ -1,19 +1,7 @@
-# Student Exam Client
-## Phase 4 Placeholder
+# Tauri + React + Typescript
 
-This app will be built in Phase 4 of the GradeINT build plan.
+This template should help get you started developing with Tauri, React and Typescript in Vite.
 
-**Tech stack:**
-- Tauri (Rust shell)
-- React/TypeScript (exam runtime UI)
-- SQLite (local answer cache)
+## Recommended IDE Setup
 
-**Responsibilities:**
-- Connect to Local School Exam Server over LAN
-- Authenticate as candidate (no browser, no internet)
-- Download and cache exam package
-- Render exam UI with timer and autosave
-- Recover from crash/restart
-- Submit to local server and display receipt
-
-See `/docs/deployment-model.md` for full specification.
+- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)

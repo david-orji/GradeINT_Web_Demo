@@ -1,16 +1,36 @@
 {
-  "name": "@gradeint/student-client",
+  "name": "student-client",
+  "private": true,
   "version": "0.1.0",
-  "description": "GradeINT Student Exam Client — Tauri desktop app for exam-taking",
   "type": "module",
-  "license": "MIT",
   "scripts": {
-    "dev": "echo 'Not yet scaffolded'",
-    "build": "echo 'Not yet scaffolded'"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
   "dependencies": {
+    "@gradeint/shared-domain": "workspace:*",
     "@gradeint/shared-types": "workspace:*",
     "@gradeint/shared-utils": "workspace:*",
-    "@gradeint/shared-domain": "workspace:*"
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-http": "^2.5.7",
+    "@tauri-apps/plugin-opener": "^2",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.453.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~5.8.3",
+    "vite": "^6.4.1"
   }
 }

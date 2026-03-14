@@ -13,17 +13,16 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let sidecar_command = app.shell().sidecar("sidecar").unwrap();
-            let (mut rx, mut _child) = sidecar_command
-                .spawn()
-                .expect("Failed to spawn Express sidecar");
-
-            tauri::async_runtime::spawn(async move {
-                while let Some(event) = rx.recv().await {
-                    if let CommandEvent::Stdout(line) = event {
-                        println!("sidecar output: {}", String::from_utf8(line).unwrap());
-                    }
-                }
+            // Bypass Tauri's sidecar to natively boot the SQLite WASM Node server directly 
+            // from the filesystem to avoid vercel/pkg native dependency crashes!
+            std::thread::spawn(|| {
+                println!("Spawning Local Sidecar via npx tsx...");
+                let mut child = std::process::Command::new("cmd")
+                    .args(["/C", "npx", "tsx", "server.ts"])
+                    .current_dir("../sidecar")
+                    .spawn()
+                    .expect("Failed to spawn sidecar dev server");
+                child.wait().unwrap();
             });
 
             Ok(())

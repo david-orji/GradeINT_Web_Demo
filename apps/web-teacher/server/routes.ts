@@ -869,7 +869,13 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
 
   /** POST /api/lan/sync/submissions — Receive batch of submissions from Local Server */
   app.post("/api/lan/sync/submissions", async (req, res) => {
-    const envelopes: SubmissionEnvelope[] = req.body.submissions || [];
+    try {
+      const fs = await import("fs");
+      fs.writeFileSync("C:/Users/FAHD MUSA AHMED/Documents/McVinci/GradeINT_Web_Demo/apps/web-teacher/sync-debug.txt", JSON.stringify(req.body, null, 2));
+    } catch (e) {
+      console.error("Failed to write debug file", e);
+    }
+    const envelopes: SubmissionEnvelope[] = Array.isArray(req.body) ? req.body : (req.body.submissions || []);
     if (!Array.isArray(envelopes)) return res.status(400).json({ message: "Invalid payload format" });
 
     const results = [];
@@ -881,10 +887,42 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
           throw new Error("Checksum mismatch — data corrupted");
         }
 
+        // Transform AnswerState[] into flat key-value object for cloud grading compatibility
+        const questions = await storage.getQuestions(Number(env.examId));
+        const mappedResponses: Record<string, string> = {};
+        
+        for (const ans of (env.answers as any[])) {
+          let textValue = ans.textAnswer || "";
+          if (ans.selectedOptionIds && ans.selectedOptionIds.length > 0) {
+             const optId = ans.selectedOptionIds[0]; // e.g., "opt-45-1"
+             const q = questions.find(question => question.id.toString() === ans.questionId);
+             if (q && q.options) {
+                 const parts = optId.split("-");
+                 const idx = parseInt(parts[parts.length - 1]);
+                 if (!isNaN(idx) && q.options[idx]) {
+                     textValue = q.options[idx];
+                 } else {
+                     textValue = optId;
+                 }
+             } else {
+                 textValue = optId;
+             }
+          }
+          mappedResponses[ans.questionId] = textValue;
+        }
+
+        // Map the textual student ID (e.g. "STU-123") to a numeric Cloud user ID.
+        // For MVP demo purposes, if it's not a number, map it to the seeded student (ID 3)
+        let numericStudentId = Number(env.studentId);
+        if (isNaN(numericStudentId)) {
+          console.warn(`[SYNC] Mapped text identity '${env.studentId}' to Cloud Student ID 3`);
+          numericStudentId = 3;
+        }
+
         // Upsert logic: if student already has a submission for this session, update it.
-        // For MVP, we'll try to find by studentId + examId
+        // For MVP, we'll try to find by numericStudentId + examId
         const existing = await storage.getSubmissionByStudentAndExam(
-          Number(env.studentId), 
+          numericStudentId, 
           Number(env.examId)
         );
 
@@ -892,10 +930,10 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
           // If the cloud already has it marked as graded/submitted, and this is just an autosave, we might skip
           // But if this is a final seal, we always overwrite.
           await storage.updateSubmission(existing.id, {
-            responses: env.answers as any,
+            responses: mappedResponses as any,
             status: env.submissionState === 'sealed' ? 'submitted' : 'in_progress',
           });
-          results.push({ studentId: env.studentId, status: "updated" });
+          results.push({ studentId: numericStudentId.toString(), status: "updated" });
         } else {
           // Note: we need a dummy sessionId if the cloud doesn't have an active session for it
           // In Phase 0 we defined that the Local Server creates sessions, but the cloud also has `exam_sessions`.
@@ -905,19 +943,27 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
 
           await storage.createSubmission({
             sessionId: targetSessionId,
-            studentId: Number(env.studentId),
+            studentId: numericStudentId,
             examId: Number(env.examId),
             status: env.submissionState === 'sealed' ? 'submitted' : 'in_progress',
-            responses: env.answers as any,
+            responses: mappedResponses as any,
           });
-          results.push({ studentId: env.studentId, status: "created" });
+          results.push({ studentId: numericStudentId.toString(), status: "created" });
         }
       } catch (err: any) {
         results.push({ studentId: env.studentId, status: "error", message: err.message });
       }
     }
 
-    res.json({ success: true, synced: results.length, details: results });
+    res.json({ 
+      success: true, 
+      synced: results.length, 
+      details: results,
+      debugPayloadType: typeof req.body,
+      debugIsArray: Array.isArray(req.body),
+      debugKeys: typeof req.body === 'object' && req.body !== null ? Object.keys(req.body) : [],
+      debugBody: req.body
+    });
   });
 
   // === SEED DATA ===

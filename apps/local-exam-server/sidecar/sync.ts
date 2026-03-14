@@ -61,6 +61,9 @@ export function startCloudSyncWorker() {
       } else {
         const data = await res.json();
         console.log(`[SYNC] Successfully synced ${data.synced} submissions to Cloud.`);
+        if (data.synced === 0) {
+           console.log(`[SYNC DEBUG] Cloud echo received:`, JSON.stringify(data, null, 2));
+        }
       }
 
     } catch (err: any) {

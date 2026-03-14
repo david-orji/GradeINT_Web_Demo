@@ -14,7 +14,7 @@ async function runBuild() {
     target: "node18",
     outfile: "dist/server.js",
     format: "cjs",
-    external: ["better-sqlite3", "drizzle-orm/better-sqlite3"], 
+    external: [], 
   });
 
   console.log("Packaging sidecar using pkg...");

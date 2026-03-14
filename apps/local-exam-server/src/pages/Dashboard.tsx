@@ -29,9 +29,20 @@ export function Dashboard() {
     }
   };
 
-  const startLocalServer = () => {
-    // Phase 3 implementation hook to start serving students
-    setSynced(true);
+  const startLocalServer = async () => {
+    if (!exam) return;
+    try {
+      const res = await fetch("http://127.0.0.1:4000/api/internal/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exam })
+      });
+      if (!res.ok) throw new Error("Failed to activate local session");
+      
+      setSynced(true);
+    } catch (err) {
+      setError("Local database error. Ensure Sidecar is running.");
+    }
   };
 
   return (
@@ -132,6 +143,13 @@ export function Dashboard() {
               <p className="text-sm text-slate-500 mb-8">
                 The local database is populated. You may now expose the server to the student LAN.
               </p>
+              
+              {error && (
+                <div className="mb-6 p-4 rounded-lg bg-red-50 text-red-700 text-sm flex items-start gap-2 border border-red-100">
+                  <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+                  <p>{error}</p>
+                </div>
+              )}
               
               {!synced ? (
                 <button
