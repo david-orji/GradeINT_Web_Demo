@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { SubmissionEnvelope } from "@gradeint/shared-types";
 import { checksumObject } from "@gradeint/shared-utils";
 
-const CLOUD_URL = "http://localhost:5000";
+const CLOUD_URL = process.env.CLOUD_URL || "http://localhost:5000";
 
 /**
  * Periodically attempts to sync unsynced submissions to the Cloud Web App.
@@ -14,42 +14,35 @@ export function startCloudSyncWorker() {
 
   setInterval(async () => {
     try {
-      // Find submissions that are 'in_progress' or 'sealed' that haven't been synced in the last X seconds 
-      // OR just continuously push updates.
-      // For MVP, we will grab all submissions from active/closed sessions.
-      
-      const subs = await db.select().from(schema.submissions);
+      // Grab all submissions using synchronous better-sqlite3
+      const subs = db.select().from(schema.submissions).all();
       if (subs.length === 0) return;
 
       const envelopes: SubmissionEnvelope[] = [];
 
       for (const sub of subs) {
-        // Find associated session to get exam accessCode
-        const session = await db.select().from(schema.sessions).where(eq(schema.sessions.id, sub.sessionId)).get();
+        const session = db.select().from(schema.sessions).where(eq(schema.sessions.id, sub.sessionId)).get();
         if (!session) continue;
-        
-        const exam = await db.select().from(schema.exams).where(eq(schema.exams.id, session.examId)).get();
+
+        const exam = db.select().from(schema.exams).where(eq(schema.exams.id, session.examId)).get();
         if (!exam) continue;
 
-        // Parse local stringified answers
         const answers = JSON.parse(sub.answersData);
 
         const envelope: SubmissionEnvelope = {
-          examId: parseInt(exam.cloudExamId), // The cloud's primary ID mapped dynamically
+          examId: parseInt(exam.cloudExamId),
           studentId: sub.studentId,
-          submissionState: sub.status === "sealed" ? "submitted" : "in_progress", // Map local state to cloud state
+          submissionState: sub.status === "sealed" ? "submitted" : "in_progress",
           answers,
           checksum: ""
         };
 
-        // Cryptographically sign the envelope
         envelope.checksum = await checksumObject(envelope);
         envelopes.push(envelope);
       }
 
       if (envelopes.length === 0) return;
 
-      // POST to cloud sync endpoint
       const res = await fetch(`${CLOUD_URL}/api/lan/sync/submissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -61,9 +54,6 @@ export function startCloudSyncWorker() {
       } else {
         const data = await res.json();
         console.log(`[SYNC] Successfully synced ${data.synced} submissions to Cloud.`);
-        if (data.synced === 0) {
-           console.log(`[SYNC DEBUG] Cloud echo received:`, JSON.stringify(data, null, 2));
-        }
       }
 
     } catch (err: any) {

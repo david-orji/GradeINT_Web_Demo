@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "student-client",
+  "productName": "GradeINT Student Client",
   "version": "0.1.0",
-  "identifier": "com.fahd-musa-ahmed.student-client",
+  "identifier": "com.gradeint.student-client",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1430",
@@ -12,9 +12,13 @@
   "app": {
     "windows": [
       {
-        "title": "student-client",
-        "width": 800,
-        "height": 600
+        "title": "GradeINT — Student Exam Client",
+        "width": 1200,
+        "height": 750,
+        "minWidth": 1024,
+        "minHeight": 640,
+        "resizable": true,
+        "center": true
       }
     ],
     "security": {
@@ -23,7 +27,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

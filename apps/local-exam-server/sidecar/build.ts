@@ -4,31 +4,41 @@ import fs from "fs";
 import path from "path";
 
 async function runBuild() {
-  console.log("Bundling sidecar using esbuild...");
+  // Ensure output dir exists
+  if (!fs.existsSync("dist")) fs.mkdirSync("dist");
   
-  // Bundle the TypeScript server into a single CommonJS file
+  // Ensure binaries dir exists for Tauri
+  const binariesDir = path.join("..", "src-tauri", "binaries");
+  if (!fs.existsSync(binariesDir)) fs.mkdirSync(binariesDir, { recursive: true });
+
+  console.log("Bundling sidecar with esbuild...");
+
   await build({
     entryPoints: ["server.ts"],
     bundle: true,
     platform: "node",
     target: "node18",
-    outfile: "dist/server.js",
+    outfile: "dist/server.cjs",
     format: "cjs",
-    external: [], 
+    // better-sqlite3 has a native .node binary — pkg will handle it separately
+    // We must mark it as external so esbuild doesn't try to bundle the .node file
+    external: ["better-sqlite3"],
   });
 
-  console.log("Packaging sidecar using pkg...");
-  
-  // Run vercel/pkg to create a native Windows executable
-  // -t node18-win-x64 targeting typical 64-bit windows
-  execSync("npx pkg dist/server.js -t node18-win-x64 -o ../src-tauri/binaries/sidecar-x86_64-pc-windows-msvc.exe", {
-    stdio: "inherit"
-  });
+  console.log("Packaging sidecar with pkg...");
 
-  console.log("Done! Tauri Sidecar binary is ready at src-tauri/binaries/sidecar-x86_64-pc-windows-msvc.exe");
+  // The pkg config is in package.json under "pkg" key.
+  // -t node18-win-x64 targets 64-bit Windows.
+  // better-sqlite3's native .node is bundled automatically by pkg when listed in assets.
+  execSync(
+    `npx pkg dist/server.cjs --target node18-win-x64 --output ${path.join(binariesDir, "sidecar-x86_64-pc-windows-msvc.exe")}`,
+    { stdio: "inherit" }
+  );
+
+  console.log(`\n✅ Sidecar binary ready at: src-tauri/binaries/sidecar-x86_64-pc-windows-msvc.exe`);
 }
 
 runBuild().catch(err => {
-  console.error(err);
+  console.error("Build failed:", err);
   process.exit(1);
 });
