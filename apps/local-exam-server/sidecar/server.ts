@@ -197,6 +197,16 @@ app.post("/api/student/submissions/seal", async (req, res) => {
 
 // END: Student Devices LAN API
 
+// Internal: Graceful Shutdown
+app.post("/api/internal/shutdown", (_req, res) => {
+  res.json({ success: true, message: "Shutting down sidecar..." });
+  // Give the response time to flush before exiting
+  setTimeout(() => {
+    console.log("[Sidecar] Received shutdown signal. Exiting.");
+    process.exit(0);
+  }, 300);
+});
+
 import { startCloudSyncWorker } from "./sync.js";
 
 const PORT = process.env.PORT || 4000;

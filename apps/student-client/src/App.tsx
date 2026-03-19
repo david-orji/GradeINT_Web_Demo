@@ -3,7 +3,7 @@ import "./App.css";
 import { Connect } from "./pages/Connect";
 import { ConnectionState, LocalAPIClient } from "./lib/local-api";
 import { LocalStore, StorageKeys, saveExamPackage, getExamPackage, saveAnswers, getAnswers } from "./lib/db";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { CheckCircle2, FileText, Clock, UserIcon, ArrowRight, LogOut, AlertTriangle } from "lucide-react";
 import { ExamPackage } from "@gradeint/shared-types";
 import { Exam } from "./pages/Exam";
 
@@ -60,9 +60,7 @@ function App() {
   const handleAutosave = async (answers: any[]) => {
     try {
       if (!connection) return;
-      // SQLite local persistence
       await saveAnswers(answers);
-      // Network push
       const client = new LocalAPIClient(connection.serverIp);
       await client.autosave(connection.studentId, answers);
     } catch (err) {
@@ -74,22 +72,16 @@ function App() {
     try {
       if (!connection) return;
       setLoading(true);
-      // Ensure final local state is captured
       await saveAnswers(answers);
-      // Send final submission request to Sidecar API
       const client = new LocalAPIClient(connection.serverIp);
-      await client.autosave(connection.studentId, answers); // Final sync
+      await client.autosave(connection.studentId, answers);
       const res = await client.submitExam(connection.studentId);
       
-      // If success, clear local DB tracking and show receipt
       await LocalStore.remove(StorageKeys.SUBMISSION_STATE);
       await LocalStore.remove(StorageKeys.CONNECTION_DATA);
       await LocalStore.remove(StorageKeys.EXAM_PACKAGE);
       setInExam(false);
-      
-      // Store local receipt payload for rendering
       setReceipt({ message: res.message, timestamp: new Date() });
-
     } catch (err: any) {
       setError("Submission Failed: " + err.message);
     } finally {
@@ -99,22 +91,29 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F9F9F7] gap-4">
+        <div className="relative">
+          <div className="w-16 h-16 border-[6px] border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+        </div>
+        <p className="text-sm font-medium text-slate-400 uppercase tracking-widest animate-pulse">Initializing Environment</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="p-6 bg-white border border-red-200 rounded-xl text-center space-y-4 shadow-sm">
-          <p className="text-red-600 font-medium">{error}</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#F9F9F7] p-8">
+        <div className="max-w-md w-full bg-white rounded-[2rem] p-10 shadow-2xl border border-red-100 text-center space-y-6">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-semibold text-slate-800">System Interruption</h2>
+          <p className="text-slate-500 font-medium leading-relaxed">{error}</p>
           <button 
             onClick={() => { setError(null); setConnection(null); setInExam(false); }}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium border border-slate-200"
+            className="w-full py-4 bg-[#1E1E1E] hover:bg-black text-white rounded-2xl font-semibold tracking-widest transition-all"
           >
-            Start Over
+            RETRY CONNECTION
           </button>
         </div>
       </div>
@@ -139,32 +138,45 @@ function App() {
 
   if (receipt) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 font-sans text-center">
-        <div className="max-w-md w-full p-8 border-t-4 border-green-500 bg-white rounded-2xl shadow-xl space-y-6">
-          <div className="h-16 w-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-100 shadow-sm">
-            <CheckCircle2 className="w-8 h-8" />
-          </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Submission Perfect!</h1>
-          
-          <div className="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200 text-left">
-            <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Candidate</p>
-              <p className="text-lg font-bold text-slate-900">{connection.studentId}</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F9F9F7] p-8 font-sans">
+        <div className="max-w-lg w-full bg-white rounded-[3rem] shadow-2xl border border-slate-100 p-12 space-y-10 relative">
+          <div className="text-center space-y-4">
+            <div className="h-20 w-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto border border-green-100 shadow-sm">
+              <CheckCircle2 className="w-10 h-10" />
             </div>
-            <div className="h-px w-full bg-slate-200" />
-            <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Server Response</p>
-              <p className="text-sm font-medium text-green-700 bg-green-100 px-3 py-1.5 rounded-lg inline-block mt-1">{receipt.message}</p>
-            </div>
-            <div className="h-px w-full bg-slate-200" />
-            <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Timestamp</p>
-              <p className="text-sm font-mono text-slate-700">{receipt.timestamp.toLocaleString()}</p>
-            </div>
+            <h1 className="text-4xl font-semibold tracking-tighter text-slate-800">Submission Perfect!</h1>
+            <p className="text-sm text-slate-400 font-medium uppercase tracking-[0.2em]">Official Digital Receipt</p>
           </div>
           
-          <p className="text-sm text-slate-500 font-medium pt-2">
-            You may now safely close this window.
+          <div className="bg-[#F9F9F7] rounded-[2rem] p-8 space-y-6 border border-slate-100">
+            <div className="grid grid-cols-2 gap-8">
+              <div>
+                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-[0.15em] mb-1">Candidate</p>
+                <p className="text-lg font-semibold text-slate-800">{connection.studentId}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-[0.15em] mb-1">Status</p>
+                <p className="text-sm font-medium text-green-600 bg-green-100 px-3 py-1 rounded-full inline-block">SEALED</p>
+              </div>
+            </div>
+            
+            <div className="h-px bg-slate-200" />
+            
+            <div>
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-[0.15em] mb-1">Confirmation Message</p>
+              <p className="text-sm font-medium text-slate-700 leading-relaxed italic">"{receipt.message}"</p>
+            </div>
+
+            <div className="h-px bg-slate-200" />
+
+            <div className="flex justify-between items-center text-[11px] font-medium text-slate-400">
+              <span>{receipt.timestamp.toLocaleDateString()}</span>
+              <span>{receipt.timestamp.toLocaleTimeString()}</span>
+            </div>
+          </div>
+          
+          <p className="text-center text-xs text-slate-500 font-normal max-w-xs mx-auto">
+            You may now safely close this window. Your script has been encrypted and synced to the cloud.
           </p>
         </div>
       </div>
@@ -172,31 +184,55 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 text-center font-sans">
-      <h1 className="text-3xl font-extrabold text-slate-900 mb-2">{exam.title}</h1>
-      <p className="text-slate-600 mb-8 whitespace-pre-wrap max-w-2xl font-medium">{exam.instructions}</p>
-      
-      <div className="p-8 border border-blue-100 bg-white rounded-2xl w-full max-w-2xl shadow-xl">
-        <h2 className="text-2xl text-blue-700 font-bold">Ready to Begin</h2>
-        <p className="text-slate-600 mt-3 font-medium">
-          You are securely connected to the local exam network as <span className="text-blue-900 font-bold bg-blue-50 px-2 py-1 rounded">{connection.studentId}</span>.
-        </p>
-        <div className="flex justify-center gap-4 mt-8">
-          <div className="py-2 px-4 bg-slate-50 border border-slate-200 rounded-lg">
-            <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">Duration</p>
-            <p className="text-lg text-slate-900 font-bold">{exam.duration / 60} minutes</p>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F9F9F7] p-8 font-sans">
+      <div className="max-w-3xl w-full grid grid-cols-1 md:grid-cols-5 gap-8 items-center">
+        <div className="md:col-span-2 space-y-6">
+          <div className="h-12 w-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-medium shadow-xl shadow-blue-600/30">
+            G
           </div>
-          <div className="py-2 px-4 bg-slate-50 border border-slate-200 rounded-lg">
-            <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">Questions</p>
-            <p className="text-lg text-slate-900 font-bold">{exam.questions.length}</p>
-          </div>
+          <h1 className="text-5xl font-semibold tracking-tighter text-slate-800 leading-[0.9]">Assessment Ready.</h1>
+          <p className="text-slate-500 font-normal text-lg leading-relaxed">
+            You are securely linked to the <span className="text-slate-800">School Local Network</span>. Proceed with academic integrity.
+          </p>
         </div>
-        <button 
-          onClick={() => setInExam(true)}
-          className="mt-8 w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-xl transition-colors shadow-md shadow-blue-600/20"
-        >
-          Start Assessment
-        </button>
+
+        <div className="md:col-span-3 bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-10 space-y-8">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold text-slate-800">{exam.title}</h2>
+            <div className="flex items-center gap-4 text-xs font-medium text-slate-400 tracking-wider">
+              <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {exam.duration / 60} MINS</span>
+              <span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> {exam.questions.length} QUESTIONS</span>
+            </div>
+          </div>
+
+          <div className="bg-[#F9F9F7] rounded-2xl p-6 border border-slate-100 space-y-4">
+            <p className="text-sm text-slate-500 leading-relaxed font-medium">
+              {exam.instructions || "Read each question carefully before submitting your final answer."}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
+            <UserIcon className="w-5 h-5 text-blue-600" />
+            <div className="flex-1">
+              <p className="text-[10px] text-blue-400 font-medium uppercase tracking-widest">Logged in As</p>
+              <p className="text-sm font-medium text-blue-900">{connection.studentId}</p>
+            </div>
+            <button 
+              onClick={() => { setConnection(null); LocalStore.remove(StorageKeys.CONNECTION_DATA); }}
+              className="p-2 hover:bg-blue-100 rounded-lg text-blue-600 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+
+          <button 
+            onClick={() => setInExam(true)}
+            className="w-full flex items-center justify-center gap-3 bg-[#1E1E1E] hover:bg-black text-white font-semibold py-5 rounded-[1.25rem] transition-all shadow-xl shadow-slate-900/10 active:scale-[0.98]"
+          >
+            START ASSESSMENT
+            <ArrowRight className="w-5 h-5" />
+          </button>
+        </div>
       </div>
     </div>
   );
