@@ -1,0 +1,31 @@
+
+> @gradeint/web-teacher@0.1.0 build C:\Users\FAHD MUSA AHMED\Documents\McVinci\GradeINT_Web_Demo\apps\web-teacher
+> tsx script/build.ts
+
+building client...
+[36mvite v7.3.1 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 2166 modules transformed.
+rendering chunks...
+computing gzip size...
+[2m../dist/public/[22m[32mindex.html                 [39m[1m[2m  2.03 kB[22m[1m[22m[2m │ gzip:   0.78 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+[2m../dist/public/[22m[35massets/index-B5JZUdvP.css  [39m[1m[2m 77.86 kB[22m[1m[22m[2m │ gzip:  12.72 kB[22m
+[2m../dist/public/[22m[36massets/xlsx-CNerDvZX.js    [39m[1m[2m429.19 kB[22m[1m[22m[2m │ gzip: 142.94 kB[22m
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[2m../dist/public/[22m[36massets/index-Co0H_CoM.js   [39m[1m[33m590.16 kB[39m[22m[2m │ gzip: 175.54 kB[22m
+[32m✓ built in 30.19s[39m
+building server...
+
+building migrate runner...
+  dist\index.cjs  1.5mb
+
+Done in 2169ms
+
+build complete.
+  dist\migrate.cjs  80.2kb
+
+Done in 253ms

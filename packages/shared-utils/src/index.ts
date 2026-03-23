@@ -4,11 +4,35 @@
 // =============================================================================
 
 /**
+ * Provides a cross-environment `crypto` object.
+ * Safely evaluates require to bypass browser bundlers.
+ */
+function getCrypto(): Crypto {
+  const g = globalThis as any;
+  if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) return crypto;
+  if (g.crypto && g.crypto.randomUUID) return g.crypto as Crypto;
+
+  try {
+    // A Vite-compatible way to dynamically require native Node modules in pkg
+    // @ts-ignore
+    const req = typeof module !== 'undefined' && module.require ? module.require : require;
+    const c = req('crypto');
+    if (c && c.webcrypto) return c.webcrypto;
+    return c;
+  } catch (e) {
+    // ignore
+  }
+  
+  throw new Error("crypto is not defined. Ensure you are on Node 19+ or a modern browser.");
+}
+
+/**
  * Generate a version-4 UUID.
  * Works in both Node.js (>=19) and browser environments.
  */
 export function generateId(): string {
-  return crypto.randomUUID();
+  const c = getCrypto();
+  return c.randomUUID();
 }
 
 /**
@@ -25,7 +49,8 @@ export function nowIso(): string {
 export async function sha256Hex(input: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(input);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const c = getCrypto();
+  const hashBuffer = await c.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }

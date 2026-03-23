@@ -7,6 +7,7 @@ import * as schema from "./schema.js";
 import path from "path";
 import os from "os";
 import fs from "fs";
+import { startCloudSyncWorker, setCloudUrl } from "./sync.js";
 
 const app = express();
 app.use(express.json());
@@ -26,7 +27,7 @@ const dataDir = isProd
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 // Simple logger for production troubleshooting
-function log(msg: string) {
+export function log(msg: string) {
   const line = `[${new Date().toISOString()}] ${msg}\n`;
   console.log(msg);
   if (isProd) {
@@ -110,14 +111,21 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, version: "1.0.0" });
 });
 
+// INTERNAL: Activate an exam for LAN delivery
 app.post("/api/internal/activate", (req, res) => {
-  const { exam } = req.body;
-  if (!exam) return res.status(400).json({ error: "exam package required" });
+  let { exam, accessCode, cloudUrl } = req.body;
+  if (!exam || !accessCode) return res.status(400).json({ error: "Exam and accessCode required" });
+
+  accessCode = accessCode.trim().toUpperCase();
+  log(`[Sidecar] Activating exam: ${exam.title} (Access Code: ${accessCode})`);
+
+  if (cloudUrl) {
+    setCloudUrl(cloudUrl);
+  }
+
   try {
-    // ExamPackage uses `examId` not `id`, and `accessCode` lives in the
-    // access_code field we pass from the teacher UI (user entered it).
+    // ExamPackage uses `examId` not `id`.
     // We accept whatever access_code the teacher used to download the package.
-    const accessCode: string = (req.body.accessCode || exam.sessionMetadata?.sessionId || exam.examId).trim().toUpperCase();
     
     const existing = db.select().from(schema.exams)
       .where(eq(schema.exams.cloud_exam_id, exam.examId)).get();
@@ -160,10 +168,48 @@ app.post("/api/internal/activate", (req, res) => {
   }
 });
 
+app.post("/api/internal/deactivate", (req, res) => {
+  const { accessCode } = req.body;
+  if (!accessCode) return res.status(400).json({ error: "accessCode required" });
+  db.update(schema.sessions)
+    .set({ status: "closed" })
+    .where(eq(schema.sessions.session_code, accessCode.trim().toUpperCase()))
+    .run();
+  res.json({ ok: true });
+});
+
 app.post("/api/internal/shutdown", (_req, res) => {
   res.json({ ok: true });
   sqlite.close();
   process.exit(0);
+});
+
+app.get("/api/internal/students", (req, res) => {
+  const sessionCode = (req.query.sessionCode as string || "").trim().toUpperCase();
+  if (!sessionCode) return res.status(400).json({ error: "sessionCode required" });
+
+  const session = db.select().from(schema.sessions)
+    .where(eq(schema.sessions.session_code, sessionCode)).get();
+    
+  if (!session) return res.json({ students: [] });
+
+  const subs = db.select().from(schema.submissions)
+    .where(eq(schema.submissions.session_id, session.id)).all();
+
+  const students = subs.map(sub => {
+    let dateStr = "";
+    if (sub.sealed_at) {
+      dateStr = new Date(sub.sealed_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return {
+      id: sub.student_id,
+      name: sub.student_name,
+      status: sub.sealed_at ? "Submitted" : "Connected",
+      time: dateStr
+    };
+  });
+
+  res.json({ students });
 });
 
 app.post("/api/student/join", (req, res) => {
@@ -180,7 +226,28 @@ app.post("/api/student/join", (req, res) => {
     log(`[Join Failed] Invalid code "${sessionCode}" or inactive session. Student: ${studentId}`);
     return res.status(404).json({ error: "Session not found or not active" });
   }
-    
+  
+  // Register the student connection immediately so they show up on the dashboard
+  const finalName = studentName || studentId;
+  const existing = db.select().from(schema.submissions)
+    .where(and(eq(schema.submissions.session_id, session.id), eq(schema.submissions.student_id, studentId))).get();
+
+  if (!existing) {
+    db.insert(schema.submissions).values({
+      session_id: session.id,
+      student_id: studentId,
+      student_name: finalName,
+      answers: "[]",
+    }).run();
+    log(`[Client Connected] Registered NEW student "${finalName}" for session ${sessionCode}`);
+  } else {
+    // If student existing from a previous test attempt of the same session ID, un-seal them 
+    db.update(schema.submissions)
+      .set({ sealed_at: null })
+      .where(eq(schema.submissions.id, existing.id)).run();
+    log(`[Client Connected] Existing student "${finalName}" re-joined session ${sessionCode}`);
+  }
+
   res.json({ ok: true, sessionId: session.id });
 });
 
@@ -252,4 +319,5 @@ app.post("/api/student/submissions/seal", (req, res) => {
 const PORT = 4000;
 app.listen(PORT, "0.0.0.0", () => {
   log(`[GradeINT Sidecar] Running on http://0.0.0.0:${PORT} (LAN reachable)`);
+  startCloudSyncWorker();
 });

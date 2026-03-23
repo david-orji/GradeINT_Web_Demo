@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { CloudClient } from "../lib/cloud-client";
+import { CloudClient, CLOUD_URL } from "../lib/cloud-client";
 import { type ExamPackage } from "@gradeint/shared-types";
 import { 
   ShieldAlert, 
@@ -64,11 +64,36 @@ export function Dashboard() {
     return () => { unlisten?.(); };
   }, []);
 
-  // Simulated student data for the UI
-  const [students] = useState([
-    { id: "STU-123", name: "John Doe", ip: "192.168.1.15", status: "In Progress", progress: 65 },
-    { id: "STU-456", name: "Sarah Smith", ip: "192.168.1.22", status: "Connected", progress: 0 },
-  ]);
+  // Live student data from Sidecar
+  const [students, setStudents] = useState<Array<{ id: string; name: string; status: string; time?: string; }>>([]);
+
+  useEffect(() => {
+    if (!synced || !accessCode) return;
+    
+    let active = true;
+    const fetchStudents = async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const res = await invoke<{ students: any[] }>("call_sidecar", {
+          method: "GET",
+          path: `/api/internal/students?sessionCode=${accessCode.trim().toUpperCase()}`,
+          body: null
+        });
+        if (active && res.students) {
+          setStudents(res.students);
+        }
+      } catch (err) {
+        // silently fail and retry later
+      }
+    };
+    
+    fetchStudents();
+    const interval = setInterval(fetchStudents, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [synced, accessCode]);
 
   const handleDownload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,11 +136,15 @@ export function Dashboard() {
       // ── Step 2: Health check ──
       await invoke("call_sidecar", { method: "GET", path: "/api/health", body: null });
 
-      // ── Step 3: Activate session (pass accessCode so sidecar can store it) ──
+      // ── Step 3: Activate session (pass accessCode and cloudUrl so sidecar can sync) ──
       await invoke("call_sidecar", {
         method: "POST",
         path: "/api/internal/activate",
-        body: { exam, accessCode: accessCode.trim().toUpperCase() },
+        body: { 
+          exam, 
+          accessCode: accessCode.trim().toUpperCase(),
+          cloudUrl: CLOUD_URL
+        },
       });
 
       setSynced(true);
@@ -326,9 +355,6 @@ export function Dashboard() {
                             <p className="font-semibold text-2xl tracking-tighter">LISTENING</p>
                             <p className="text-xs text-slate-400 font-medium mt-2 uppercase tracking-widest">Active on port 4000</p>
                           </div>
-                          <button className="w-full py-4 text-xs font-medium text-slate-400 hover:text-white transition-colors uppercase tracking-widest">
-                            Stop Network Bridge
-                          </button>
                         </div>
                       )}
                     </div>
@@ -358,48 +384,52 @@ export function Dashboard() {
                 <thead className="bg-[#F9F9F7] text-[10px] font-medium text-[#8C8C85] uppercase tracking-[0.2em]">
                   <tr>
                     <th className="px-8 py-4">Candidate</th>
-                    <th className="px-8 py-4">Network ID</th>
-                    <th className="px-8 py-4">Status</th>
-                    <th className="px-8 py-4 text-right">Progress</th>
+                    <th className="px-8 py-4 text-right">Submission State</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#F2F2EF] text-sm font-bold text-[#4D4D48]">
-                  {students.map(s => (
-                    <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-8 py-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-400">
-                            {s.id.slice(-2)}
-                          </div>
-                          <div>
-                            <p className="text-slate-800 font-semibold">{s.name}</p>
-                            <p className="text-[10px] text-slate-400">{s.id}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-8 py-6 font-mono text-xs">{s.ip}</td>
-                      <td className="px-8 py-6">
-                        <span className={cn(
-                          "px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wider",
-                          s.status === "In Progress" ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-blue-50 text-blue-600 border border-blue-100"
-                        )}>
-                          {s.status}
-                        </span>
-                      </td>
-                      <td className="px-8 py-6 text-right">
-                        <div className="flex items-center justify-end gap-3 font-medium text-slate-900">
-                          <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-600" style={{ width: `${s.progress}%` }} />
-                          </div>
-                          {s.progress}%
-                        </div>
+                  {students.length === 0 ? (
+                    <tr>
+                      <td colSpan={2} className="px-8 py-10 text-center text-slate-400 font-medium">
+                        Listening for incoming connections...
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    students.map(s => (
+                      <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-400">
+                              {s.name.slice(0,2).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-slate-800 font-semibold">{s.name}</p>
+                              <p className="text-[10px] text-slate-400">{s.id}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          <span className={cn(
+                            "px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wider inline-flex items-center gap-1.5",
+                            s.status === "Connected" 
+                              ? "bg-amber-50 text-amber-600 border border-amber-100" 
+                              : "bg-green-50 text-green-600 border border-green-100"
+                          )}>
+                            {s.status === "Connected" && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
+                            {s.status === "Submitted" && <CheckCircle className="w-3 h-3" />}
+                            {s.status}
+                          </span>
+                          {s.status === "Submitted" && s.time && (
+                            <span className="block mt-1 text-[9px] text-slate-400 font-medium">at {s.time}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
               <div className="p-6 bg-[#F9F9F7] border-t border-[#F2F2EF] text-center">
-                <p className="text-[10px] text-[#8C8C85] font-bold uppercase tracking-[0.2em]">Refresh for latest telemetry</p>
+                <p className="text-[10px] text-[#8C8C85] font-bold uppercase tracking-[0.2em]">Auto-syncing every 3s via LAN</p>
               </div>
             </div>
           )}

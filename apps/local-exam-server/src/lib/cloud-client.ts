@@ -3,7 +3,7 @@ import { verifyChecksum } from "@gradeint/shared-utils";
 
 // In production, this would be an environment variable or a configuration setting.
 // For MVP Phase 3 testing, we hardcode the local development cloud server address.
-const CLOUD_URL = "http://127.0.0.1:5000";
+export const CLOUD_URL = "http://127.0.0.1:5000";
 
 export class CloudClient {
   /**
