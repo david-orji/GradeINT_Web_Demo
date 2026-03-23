@@ -2,30 +2,31 @@ import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
 export const exams = sqliteTable("exams", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  cloudExamId: text("cloud_exam_id").notNull(),
-  accessCode: text("access_code").notNull().unique(),
+  cloud_exam_id: text("cloud_exam_id").notNull(),
+  access_code: text("access_code").notNull().unique(),
   title: text("title").notNull(),
-  packageData: text("package_data").notNull(), // JSON string of ExamPackage
+  package_data: text("package_data").notNull(), // JSON string of ExamPackage
   checksum: text("checksum").notNull(),
-  downloadedAt: integer("downloaded_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  downloaded_at: integer("downloaded_at"),
 });
 
 export const sessions = sqliteTable("sessions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  examId: integer("exam_id").references(() => exams.id).notNull(),
-  status: text("status", { enum: ["active", "closed", "synced"] }).notNull().default("active"),
-  startedAt: integer("started_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  sealedAt: integer("sealed_at", { mode: "timestamp" }),
+  exam_id: integer("exam_id").notNull(),
+  session_code: text("session_code").notNull().unique(),
+  status: text("status", { enum: ["pending", "active", "closed", "synced"] }).notNull().default("pending"),
+  activated_at: integer("activated_at"),
+  closed_at: integer("closed_at"),
 });
 
 export const submissions = sqliteTable("submissions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  sessionId: integer("session_id").references(() => sessions.id).notNull(),
-  studentId: text("student_id").notNull(),
-  studentName: text("student_name").notNull(),
-  clientIp: text("client_ip").notNull(),
-  answersData: text("answers_data").notNull().default("[]"),
-  status: text("status", { enum: ["connected", "in_progress", "submitted", "sealed"] }).notNull().default("connected"),
-  lastAutosaveAt: integer("last_autosave_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  sealedAt: integer("sealed_at", { mode: "timestamp" }),
+  session_id: integer("session_id").notNull(),
+  student_id: text("student_id").notNull(),
+  student_name: text("student_name").notNull(),
+  answers: text("answers").notNull(),
+  sealed_at: integer("sealed_at"),
+  synced_at: integer("synced_at"),
+  sync_attempts: integer("sync_attempts").notNull().default(0),
+  checksum: text("checksum"),
 });

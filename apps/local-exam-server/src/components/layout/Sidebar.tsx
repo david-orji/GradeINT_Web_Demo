@@ -16,9 +16,10 @@ interface SidebarProps {
   className?: string;
   activeTab: string;
   onTabChange: (tab: string) => void;
+  sidecarStatus?: string | null;
 }
 
-export function Sidebar({ className, activeTab, onTabChange }: SidebarProps) {
+export function Sidebar({ className, activeTab, onTabChange, sidecarStatus }: SidebarProps) {
   const [closing, setClosing] = useState(false);
 
   const handleClose = async () => {
@@ -91,7 +92,14 @@ export function Sidebar({ className, activeTab, onTabChange }: SidebarProps) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-white uppercase tracking-wider">System Status</p>
-            <p className="text-[11px] text-green-500 font-medium uppercase">Online & Listening</p>
+            <p className={cn(
+              "text-[11px] font-medium uppercase",
+              sidecarStatus === 'ready' ? "text-green-500" : 
+              sidecarStatus?.startsWith('error') ? "text-red-500" : "text-amber-400"
+            )}>
+              {sidecarStatus === 'ready' ? "Online & Listening" : 
+               sidecarStatus?.startsWith('error') ? "Sidecar Error" : "Sidecar Booting..."}
+            </p>
           </div>
         </div>
         

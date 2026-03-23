@@ -20,11 +20,12 @@ export class LocalAPIClient {
   /**
    * Ping the local server to verify connection and session validity.
    */
-  async joinSession(accessCode: string, studentId: string): Promise<{ submissionId: string }> {
+  async joinSession(accessCode: string, studentId: string): Promise<{ sessionId: string }> {
     const res = await fetch(`${this.baseUrl}/join`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionCode: accessCode, studentId }),
+      // Sidecar expects studentName, we'll send studentId as name for now
+      body: JSON.stringify({ sessionCode: accessCode, studentId, studentName: studentId }),
     });
 
     if (!res.ok) {
@@ -38,8 +39,8 @@ export class LocalAPIClient {
   /**
    * Fetch the exam package cached on the local server.
    */
-  async fetchExamPackage(accessCode: string): Promise<ExamPackage> {
-    const res = await fetch(`${this.baseUrl}/exam?accessCode=${accessCode}`);
+  async fetchExamPackage(sessionCode: string): Promise<ExamPackage> {
+    const res = await fetch(`${this.baseUrl}/exam/${sessionCode}`);
     if (!res.ok) {
       throw new Error("Failed to download exam package from local server.");
     }
@@ -49,11 +50,11 @@ export class LocalAPIClient {
   /**
    * Periodically push the latest answers state to the local server
    */
-  async autosave(studentId: string, answers: any[]): Promise<void> {
+  async autosave(sessionCode: string, studentId: string, answers: any[]): Promise<void> {
     const res = await fetch(`${this.baseUrl}/submissions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId, answers }),
+      body: JSON.stringify({ sessionCode, studentId, studentName: studentId, answers }),
     });
     if (!res.ok) throw new Error("Autosave sync failed");
   }
@@ -61,11 +62,11 @@ export class LocalAPIClient {
   /**
    * Tell the local server the candidate is done, seal the exam and receive a receipt
    */
-  async submitExam(studentId: string): Promise<{ success: boolean, message: string }> {
+  async submitExam(sessionCode: string, studentId: string): Promise<{ success: boolean, receipt: string }> {
     const res = await fetch(`${this.baseUrl}/submissions/seal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId }),
+      body: JSON.stringify({ sessionCode, studentId }),
     });
     
     if (!res.ok) {

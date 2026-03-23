@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Server, KeyRound, User, LogIn, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
+import { Server, User, LogIn, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
 import { LocalAPIClient, ConnectionState } from "../lib/local-api";
 
 interface ConnectProps {
@@ -24,13 +24,13 @@ export function Connect({ onConnected }: ConnectProps) {
       }
 
       const client = new LocalAPIClient(serverIp);
-      const { submissionId } = await client.joinSession(sessionCode, studentId);
+      const { sessionId } = await client.joinSession(sessionCode, studentId);
       
       onConnected({
         serverIp,
         sessionCode,
         studentId,
-        submissionId
+        submissionId: sessionId
       });
     } catch (err: any) {
       setError(err.message || "Failed to connect to the exam server.");
@@ -79,18 +79,15 @@ export function Connect({ onConnected }: ConnectProps) {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-medium text-slate-400 uppercase tracking-[0.2em] ml-1">Access Token</label>
-            <div className="relative">
-              <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={sessionCode}
-                onChange={(e) => setSessionCode(e.target.value.toUpperCase())}
-                placeholder="Enter Code"
-                className="w-full bg-[#F9F9F7] border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-[1.25rem] py-4 pl-12 pr-4 text-slate-800 font-medium placeholder:text-slate-300 transition-all outline-none uppercase tracking-widest"
-                required
-              />
-            </div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 font-sans">Exam Access Code</label>
+            <input
+              type="text"
+              placeholder="e.g. PO7KUV8U"
+              value={sessionCode}
+              onChange={(e) => setSessionCode(e.target.value.toUpperCase())}
+              className="w-full px-6 py-4 rounded-2xl bg-[#F9F9F7] border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all text-xl font-semibold tracking-widest font-mono uppercase"
+              autoComplete="off"
+            />
           </div>
 
           <div className="space-y-2">

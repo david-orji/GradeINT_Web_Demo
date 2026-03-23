@@ -62,7 +62,7 @@ function App() {
       if (!connection) return;
       await saveAnswers(answers);
       const client = new LocalAPIClient(connection.serverIp);
-      await client.autosave(connection.studentId, answers);
+      await client.autosave(connection.sessionCode, connection.studentId, answers);
     } catch (err) {
       console.error("Autosave failed in background:", err);
     }
@@ -74,14 +74,14 @@ function App() {
       setLoading(true);
       await saveAnswers(answers);
       const client = new LocalAPIClient(connection.serverIp);
-      await client.autosave(connection.studentId, answers);
-      const res = await client.submitExam(connection.studentId);
+      await client.autosave(connection.sessionCode, connection.studentId, answers);
+      const res = await client.submitExam(connection.sessionCode, connection.studentId);
       
       await LocalStore.remove(StorageKeys.SUBMISSION_STATE);
       await LocalStore.remove(StorageKeys.CONNECTION_DATA);
       await LocalStore.remove(StorageKeys.EXAM_PACKAGE);
       setInExam(false);
-      setReceipt({ message: res.message, timestamp: new Date() });
+      setReceipt({ message: res.receipt, timestamp: new Date() });
     } catch (err: any) {
       setError("Submission Failed: " + err.message);
     } finally {

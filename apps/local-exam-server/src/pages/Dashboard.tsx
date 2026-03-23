@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CloudClient } from "../lib/cloud-client";
 import { type ExamPackage } from "@gradeint/shared-types";
 import { 
@@ -8,7 +8,6 @@ import {
   CheckCircle, 
   Activity, 
   Monitor, 
-  Zap,
   ChevronRight,
   RefreshCw,
   Search,
@@ -23,8 +22,47 @@ export function Dashboard() {
   const [accessCode, setAccessCode] = useState("");
   const [exam, setExam] = useState<ExamPackage | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<React.ReactNode | null>(null);
   const [synced, setSynced] = useState(false);
+  const [lanIp, setLanIp] = useState<string>("Detecting...");
+  // sidecarStatus: 'starting' | 'ready' | 'error:...' | null (null = browser/dev mode)
+  const [sidecarStatus, setSidecarStatus] = useState<string | null>(
+    typeof window !== "undefined" && (window as any).__TAURI__ ? "starting" : null
+  );
+
+  // Listen for the sidecar-status event emitted by lib.rs
+  // Dynamic import avoids top-level await (invalid in es2020 target)
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        const { invoke } = await import("@tauri-apps/api/core");
+
+        // Fetch LAN IP
+        const ip = await invoke<string>("get_lan_ip");
+        setLanIp(ip);
+
+        // 1. Check current status immediately (in case we missed the boot event)
+        const currentStatus = await invoke<string>("get_sidecar_status");
+        setSidecarStatus(currentStatus);
+        if (currentStatus.startsWith("error")) {
+          setError(`Sidecar failed: ${currentStatus.replace("error: ", "")}`);
+        }
+
+        // 2. Listen for future updates
+        unlisten = await listen<string>("sidecar-status", (e) => {
+          setSidecarStatus(e.payload);
+          if (e.payload.startsWith("error")) {
+            setError(`Sidecar failed: ${e.payload.replace("error: ", "")}`);
+          } else if (e.payload === "ready") {
+            setError(null);
+          }
+        });
+      } catch { /* running in browser/dev mode — Tauri API not available */ }
+    })();
+    return () => { unlisten?.(); };
+  }, []);
 
   // Simulated student data for the UI
   const [students] = useState([
@@ -47,26 +85,50 @@ export function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const startLocalServer = async () => {
+  };  const startLocalServer = async () => {
     if (!exam) return;
+    setError(null);
+    setLoading(true);
+
+    const { invoke } = await import("@tauri-apps/api/core");
+
     try {
-      const res = await fetch("http://127.0.0.1:4000/api/internal/activate", {
+      // ── Step 1: Wait for sidecar to be ready (up to 15s) ──
+      let ready = sidecarStatus === "ready";
+      if (!ready) {
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, 500));
+          const s = await invoke<string>("get_sidecar_status");
+          setSidecarStatus(s);
+          if (s === "ready") { ready = true; break; }
+          if (s.startsWith("error")) {
+            throw new Error(`Sidecar failed to start: ${s.replace("error: ", "")}`);
+          }
+        }
+      }
+      if (!ready) throw new Error("Sidecar did not become ready in time. Check that port 4000 is not blocked.");
+
+      // ── Step 2: Health check ──
+      await invoke("call_sidecar", { method: "GET", path: "/api/health", body: null });
+
+      // ── Step 3: Activate session (pass accessCode so sidecar can store it) ──
+      await invoke("call_sidecar", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ exam })
+        path: "/api/internal/activate",
+        body: { exam, accessCode: accessCode.trim().toUpperCase() },
       });
-      if (!res.ok) throw new Error("Failed to activate local session");
+
       setSynced(true);
-    } catch (err) {
-      setError("Local database error. Ensure Sidecar is running.");
+    } catch (err: any) {
+      setError(`Broadcast failed: ${err?.message ?? err}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="flex h-screen bg-[#F9F9F7] font-sans overflow-hidden">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} sidecarStatus={sidecarStatus} />
       
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
         {/* Top Header */}
@@ -82,9 +144,18 @@ export function Dashboard() {
               <RefreshCw className="w-4 h-4" />
             </button>
             <div className="h-4 w-px bg-[#E5E5E0]" />
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-blue-300 text-[10px] font-medium uppercase tracking-wider">
-              <Zap className="w-3 h-3 fill-current" />
-              Node Service active
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider ${
+              sidecarStatus === 'ready'
+                ? 'bg-green-50 border border-green-100 text-green-600'
+                : sidecarStatus?.startsWith('error')
+                ? 'bg-red-50 border border-red-100 text-red-500'
+                : 'bg-amber-50 border border-amber-100 text-amber-500'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                sidecarStatus === 'ready' ? 'bg-green-500 animate-pulse' :
+                sidecarStatus?.startsWith('error') ? 'bg-red-500' : 'bg-amber-400 animate-pulse'
+              }`} />
+              {sidecarStatus === 'ready' ? 'Sidecar Online' : sidecarStatus?.startsWith('error') ? 'Sidecar Error' : 'Sidecar Starting…'}
             </div>
           </div>
         </header>
@@ -226,20 +297,34 @@ export function Dashboard() {
                         </div>
                       )}
                       
+                      <div className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/10 mt-6 shadow-inner">
+                        <Monitor className="w-5 h-5 text-blue-400" />
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Client Connect IP</p>
+                          <p className="text-sm font-semibold text-blue-400 tracking-wider font-mono">{lanIp}</p>
+                          <p className="text-[9px] text-slate-500 mt-0.5">Port 4000 — type only the IP above</p>
+                        </div>
+                      </div>
+                      
                       {!synced ? (
                         <button
                           onClick={startLocalServer}
-                          className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-6 px-4 rounded-2xl transition-all shadow-xl shadow-emerald-500/30 active:scale-[0.98] flex items-center justify-center gap-3"
+                          disabled={loading || sidecarStatus === "starting"}
+                          className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-6 px-4 rounded-2xl transition-all shadow-xl shadow-emerald-500/30 active:scale-[0.98] flex items-center justify-center gap-3"
                         >
                           <Play className="w-6 h-6 fill-current" />
-                          BROADCAST TO LAN
+                          {loading
+                            ? "Connecting to Sidecar..."
+                            : sidecarStatus === "starting"
+                            ? "Sidecar Booting..."
+                            : "BROADCAST TO LAN"}
                         </button>
                       ) : (
-                        <div className="space-y-6">
-                          <div className="p-8 bg-black/40 rounded-3xl border border-white/10 text-center animate-pulse-subtle">
-                            <div className="w-3 h-3 bg-emerald-500 rounded-full mx-auto mb-4 shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
+                        <div className="space-y-4">
+                          <div className="p-8 bg-black/40 rounded-3xl border border-white/10 text-center">
+                            <div className="w-3 h-3 bg-emerald-500 rounded-full mx-auto mb-4 shadow-[0_0_15px_rgba(16,185,129,0.5)] animate-pulse" />
                             <p className="font-semibold text-2xl tracking-tighter">LISTENING</p>
-                            <p className="text-xs text-slate-400 font-medium mt-2 uppercase tracking-widest">Active on 4,000</p>
+                            <p className="text-xs text-slate-400 font-medium mt-2 uppercase tracking-widest">Active on port 4000</p>
                           </div>
                           <button className="w-full py-4 text-xs font-medium text-slate-400 hover:text-white transition-colors uppercase tracking-widest">
                             Stop Network Bridge
@@ -320,11 +405,38 @@ export function Dashboard() {
           )}
 
           {activeTab === "exams" && (
-            <div className="text-center py-20 bg-white rounded-[2rem] border border-[#E5E5E0] shadow-sm">
-              <DownloadCloud className="w-12 h-12 text-[#D9D9D1] mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-[#1E1E1E] tracking-tighter">No Cached Packages</h2>
-              <p className="text-sm text-[#8C8C85] font-medium mt-2">Download a new package from the overview tab.</p>
-            </div>
+            exam ? (
+              <div className="bg-white rounded-[2rem] border border-[#E5E5E0] shadow-sm overflow-hidden">
+                <div className="p-8 border-b border-[#F2F2EF]">
+                  <h2 className="text-xl font-semibold text-[#1E1E1E] tracking-tighter">Cached Packages</h2>
+                  <p className="text-xs text-[#8C8C85] font-medium mt-1">1 package loaded in memory this session</p>
+                </div>
+                <div className="p-8">
+                  <div className="flex items-center gap-6 p-6 rounded-2xl bg-[#F9F9F7] border border-[#E5E5E0]">
+                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
+                      <CheckCircle className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-[#1E1E1E] truncate">{exam.title}</p>
+                      <p className="text-xs text-[#8C8C85] font-medium mt-0.5">
+                        {exam.questions.length} questions · {exam.duration / 60}m · ID: <span className="font-mono">{exam.examId.slice(0,8)}</span>
+                      </p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wider shrink-0 ${
+                      synced ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-amber-50 text-amber-600 border border-amber-100'
+                    }`}>
+                      {synced ? 'Broadcasting' : 'Ready'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-20 bg-white rounded-[2rem] border border-[#E5E5E0] shadow-sm">
+                <DownloadCloud className="w-12 h-12 text-[#D9D9D1] mx-auto mb-4" />
+                <h2 className="text-xl font-semibold text-[#1E1E1E] tracking-tighter">No Cached Packages</h2>
+                <p className="text-sm text-[#8C8C85] font-medium mt-2">Download a new package from the overview tab.</p>
+              </div>
+            )
           )}
 
           {activeTab === "settings" && (

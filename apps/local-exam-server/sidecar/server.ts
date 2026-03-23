@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema.js";
@@ -17,24 +17,55 @@ app.use(cors({
   credentials: true
 }));
 
-// ─── SQLite Path Resolution ────────────────────────────────────────────────
-// In production (PKG bundle), use %APPDATA%\GradeINT\ so data persists
-// across updates and isn't locked inside Program Files.
-// In dev (npx tsx), use the local sidecar folder for convenience.
-function getDbPath(): string {
-  const isProd = typeof (process as any).pkg !== "undefined";
+// ─── Logging & Path Resolution ─────────────────────────────────────────────
+const isProd = typeof (process as any).pkg !== "undefined";
+const dataDir = isProd 
+  ? path.join(os.homedir(), "AppData", "Roaming", "GradeINT")
+  : process.cwd();
+
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+// Simple logger for production troubleshooting
+function log(msg: string) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
+  console.log(msg);
   if (isProd) {
-    const dataDir = path.join(os.homedir(), "AppData", "Roaming", "GradeINT");
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    return path.join(dataDir, "local-exam.sqlite");
+    fs.appendFileSync(path.join(dataDir, "sidecar.log"), line);
   }
-  return path.join(process.cwd(), "local-exam.sqlite");
 }
 
-const sqlite = new Database(getDbPath());
-// Enable WAL mode for better concurrent read performance
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+log("Sidecar starting...");
+log(`Platform: ${process.platform}, Arch: ${process.arch}, Node: ${process.version}`);
+
+// Parse CLI args for native binding path
+const args = process.argv.slice(2);
+const bindingArg = args.find(a => a.startsWith("--binding-path="));
+const bindingPath = bindingArg ? bindingArg.split("=")[1] : null;
+
+function getDbPath(): string {
+  return path.join(dataDir, "local-exam.sqlite");
+}
+
+let sqlite: Database.Database;
+try {
+  log(`Opening database at: ${getDbPath()}`);
+  
+  const options: Database.Options = {};
+  if (bindingPath) {
+    log(`Using explicit native binding at: ${bindingPath}`);
+    options.nativeBinding = bindingPath;
+  } else if (isProd) {
+    log("WARNING: Running in production but no --binding-path provided.");
+  }
+
+  sqlite = new Database(getDbPath(), options);
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("foreign_keys = ON");
+  log("Database opened successfully.");
+} catch (err: any) {
+  log(`CRITICAL: Database failed to open: ${err.message}`);
+  process.exit(1);
+}
 
 export const db = drizzle(sqlite, { schema });
 
@@ -53,9 +84,10 @@ sqlite.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     exam_id INTEGER NOT NULL REFERENCES exams(id),
-    status TEXT NOT NULL DEFAULT 'active',
-    started_at INTEGER DEFAULT (unixepoch()),
-    sealed_at INTEGER
+    session_code TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    activated_at INTEGER,
+    closed_at INTEGER
   );
 
   CREATE TABLE IF NOT EXISTS submissions (
@@ -63,166 +95,161 @@ sqlite.exec(`
     session_id INTEGER NOT NULL REFERENCES sessions(id),
     student_id TEXT NOT NULL,
     student_name TEXT NOT NULL,
-    client_ip TEXT NOT NULL,
-    answers_data TEXT NOT NULL DEFAULT '[]',
-    status TEXT NOT NULL DEFAULT 'connected',
-    last_autosave_at INTEGER DEFAULT (unixepoch()),
-    sealed_at INTEGER
+    answers TEXT NOT NULL,
+    sealed_at INTEGER,
+    synced_at INTEGER,
+    sync_attempts INTEGER NOT NULL DEFAULT 0,
+    checksum TEXT
   );
 `);
-console.log("Local SQLite Schema Applied (better-sqlite3)");
 
-// ─── Health Check ───────────────────────────────────────────────────────────
+// ─── API Routes ────────────────────────────────────────────────────────────
+
+// Health check — used by the frontend to confirm the sidecar is fully ready
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", role: "local-exam-server" });
+  res.json({ ok: true, version: "1.0.0" });
 });
-
-// ─── Internal React UI API ──────────────────────────────────────────────────
 
 app.post("/api/internal/activate", (req, res) => {
   const { exam } = req.body;
-  if (!exam || (!exam.id && !exam.examId)) return res.status(400).json({ error: "Invalid exam payload" });
-
+  if (!exam) return res.status(400).json({ error: "exam package required" });
   try {
-    const cloudId = exam.id || exam.examId;
-
-    // 1. Insert or update the exam template
-    const existingExam = db.select().from(schema.exams).where(eq(schema.exams.cloudExamId, cloudId)).get();
-
-    let localExamId: number;
-    if (existingExam) {
-      localExamId = existingExam.id;
-      db.update(schema.exams).set({
+    // ExamPackage uses `examId` not `id`, and `accessCode` lives in the
+    // access_code field we pass from the teacher UI (user entered it).
+    // We accept whatever access_code the teacher used to download the package.
+    const accessCode: string = (req.body.accessCode || exam.sessionMetadata?.sessionId || exam.examId).trim().toUpperCase();
+    
+    const existing = db.select().from(schema.exams)
+      .where(eq(schema.exams.cloud_exam_id, exam.examId)).get();
+    if (!existing) {
+      db.insert(schema.exams).values({
+        cloud_exam_id: exam.examId,
+        access_code: accessCode,
         title: exam.title,
-        packageData: JSON.stringify(exam),
-        checksum: exam.checksum || "no-checksum",
-      }).where(eq(schema.exams.id, existingExam.id)).run();
-    } else {
-      const inserted = db.insert(schema.exams).values({
-        cloudExamId: cloudId,
-        accessCode: exam.accessCode || Math.random().toString(36).substring(2, 10).toUpperCase(),
-        title: exam.title,
-        packageData: JSON.stringify(exam),
-        checksum: exam.checksum || "no-checksum",
-      }).returning().get();
-      localExamId = inserted.id;
+        package_data: JSON.stringify(exam),
+        checksum: exam.checksum,
+      }).run();
     }
-
-    // 2. Close any existing active sessions
-    db.update(schema.sessions)
-      .set({ status: "closed" })
-      .where(eq(schema.sessions.status, "active"))
-      .run();
-
-    // 3. Create a new active session
-    const newSession = db.insert(schema.sessions).values({
-      examId: localExamId,
-      status: "active",
-    }).returning().get();
-
-    return res.json({ success: true, sessionId: newSession.id });
-  } catch (err: any) {
-    console.error("Failed to activate exam session:", err);
-    return res.status(500).json({ error: "Failed to persist active session" });
+    const examRow = db.select().from(schema.exams)
+      .where(eq(schema.exams.cloud_exam_id, exam.examId)).get();
+    
+    const existingSession = db.select().from(schema.sessions)
+      .where(eq(schema.sessions.exam_id, examRow!.id)).get();
+    if (!existingSession) {
+      db.insert(schema.sessions).values({
+        exam_id: examRow!.id,
+        session_code: accessCode,
+        status: "active",
+        activated_at: Math.floor(Date.now() / 1000),
+      }).run();
+    } else {
+      db.update(schema.sessions).set({
+        session_code: accessCode,
+        status: "active",
+        activated_at: Math.floor(Date.now() / 1000)
+      }).where(eq(schema.sessions.id, existingSession.id)).run();
+    }
+    const session = db.select().from(schema.sessions)
+      .where(eq(schema.sessions.exam_id, examRow!.id)).get();
+    log(`Session activated: ${session!.session_code} for exam "${exam.title}"`);
+    res.json({ ok: true, sessionCode: session!.session_code });
+  } catch (err) {
+    log(`[activate] Error: ${(err as any).message}`);
+    console.error("[activate]", err);
+    res.status(500).json({ error: "Failed to activate session" });
   }
 });
 
-// ─── Student Devices LAN API ────────────────────────────────────────────────
-
-// 1. Join Exam Session
-app.post("/api/student/join", (req, res) => {
-  const { sessionCode, studentId, studentName } = req.body;
-  if (!sessionCode || !studentId) return res.status(400).json({ error: "Missing identity" });
-
-  const activeSession = db.select().from(schema.sessions)
-    .where(eq(schema.sessions.status, "active"))
-    .get();
-
-  if (!activeSession) return res.status(404).json({ error: "No active exam session" });
-
-  // Create or reconnect submission record
-  let sub = db.select().from(schema.submissions)
-    .where(eq(schema.submissions.studentId, studentId))
-    .get();
-
-  if (!sub) {
-    sub = db.insert(schema.submissions).values({
-      sessionId: activeSession.id,
-      studentId,
-      studentName: studentName || "Unknown Candidate",
-      clientIp: req.ip || "unknown",
-      status: "connected",
-    }).returning().get();
-  }
-
-  return res.json({ success: true, submissionId: sub.id.toString() });
-});
-
-// 2. Fetch Exam Package
-app.get("/api/student/exam", (_req, res) => {
-  const activeSession = db.select().from(schema.sessions)
-    .where(eq(schema.sessions.status, "active"))
-    .get();
-
-  if (!activeSession) return res.status(404).json({ error: "No active exam session" });
-
-  const exam = db.select().from(schema.exams)
-    .where(eq(schema.exams.id, activeSession.examId))
-    .get();
-
-  if (!exam) return res.status(404).json({ error: "Exam data missing locally" });
-
-  return res.type("json").send(exam.packageData);
-});
-
-// 3. Autosave Submission
-app.post("/api/student/submissions", (req, res) => {
-  const { studentId, answers } = req.body;
-  if (!studentId || !answers) return res.status(400).json({ error: "Bad payload" });
-
-  db.update(schema.submissions)
-    .set({
-      answersData: JSON.stringify(answers),
-      lastAutosaveAt: new Date(),
-      status: "in_progress",
-    })
-    .where(eq(schema.submissions.studentId, studentId))
-    .run();
-
-  return res.json({ success: true });
-});
-
-// 4. Final Seal
-app.post("/api/student/submissions/seal", (req, res) => {
-  const { studentId } = req.body;
-  if (!studentId) return res.status(400).json({ error: "Bad payload" });
-
-  db.update(schema.submissions)
-    .set({
-      status: "sealed",
-      sealedAt: new Date(),
-    })
-    .where(eq(schema.submissions.studentId, studentId))
-    .run();
-
-  return res.json({ success: true, message: "Receipt generated locally" });
-});
-
-// ─── Internal: Graceful Shutdown ────────────────────────────────────────────
 app.post("/api/internal/shutdown", (_req, res) => {
-  res.json({ success: true, message: "Shutting down sidecar..." });
-  setTimeout(() => {
-    console.log("[Sidecar] Received shutdown signal. Exiting.");
-    sqlite.close();
-    process.exit(0);
-  }, 300);
+  res.json({ ok: true });
+  sqlite.close();
+  process.exit(0);
 });
 
-// ─── Boot ───────────────────────────────────────────────────────────────────
-import { startCloudSyncWorker } from "./sync.js";
+app.post("/api/student/join", (req, res) => {
+  let { sessionCode, studentId, studentName } = req.body;
+  if (!sessionCode || !studentId)
+    return res.status(400).json({ error: "sessionCode and studentId required" });
+  
+  sessionCode = sessionCode.trim().toUpperCase();
+  
+  const session = db.select().from(schema.sessions)
+    .where(eq(schema.sessions.session_code, sessionCode)).get();
+    
+  if (!session || session.status !== "active") {
+    log(`[Join Failed] Invalid code "${sessionCode}" or inactive session. Student: ${studentId}`);
+    return res.status(404).json({ error: "Session not found or not active" });
+  }
+    
+  res.json({ ok: true, sessionId: session.id });
+});
 
-const PORT = process.env.PORT || 4000;
+app.get("/api/student/exam/:sessionCode", (req, res) => {
+  const sessionCode = req.params.sessionCode.trim().toUpperCase();
+  const session = db.select().from(schema.sessions)
+    .where(eq(schema.sessions.session_code, sessionCode)).get();
+  if (!session) return res.status(404).json({ error: "Session not found" });
+  
+  const exam = db.select().from(schema.exams)
+    .where(eq(schema.exams.id, session.exam_id)).get();
+  if (!exam) return res.status(404).json({ error: "Exam not found" });
+  
+  res.json(JSON.parse(exam.package_data));
+});
+
+app.post("/api/student/submissions", (req, res) => {
+  let { sessionCode, studentId, studentName, answers } = req.body;
+  if (!sessionCode || !studentId)
+    return res.status(400).json({ error: "sessionCode and studentId required" });
+
+  sessionCode = sessionCode.trim().toUpperCase();
+
+  const session = db.select().from(schema.sessions)
+    .where(eq(schema.sessions.session_code, sessionCode)).get();
+  if (!session) return res.status(404).json({ error: "Session not found" });
+
+  // Use studentId as name if missing
+  const finalName = studentName || studentId;
+
+  // UPSERT: Check if submission exists
+  const existing = db.select().from(schema.submissions)
+    .where(and(eq(schema.submissions.session_id, session.id), eq(schema.submissions.student_id, studentId))).get();
+
+  if (existing) {
+    db.update(schema.submissions)
+      .set({ answers: JSON.stringify(answers) })
+      .where(eq(schema.submissions.id, existing.id)).run();
+  } else {
+    db.insert(schema.submissions).values({
+      session_id: session.id,
+      student_id: studentId,
+      student_name: finalName,
+      answers: JSON.stringify(answers),
+    }).run();
+  }
+  
+  res.json({ ok: true });
+});
+
+app.post("/api/student/submissions/seal", (req, res) => {
+  let { sessionCode, studentId } = req.body;
+  if (!sessionCode || !studentId)
+    return res.status(400).json({ error: "sessionCode and studentId required" });
+
+  sessionCode = sessionCode.trim().toUpperCase();
+
+  const session = db.select().from(schema.sessions)
+    .where(eq(schema.sessions.session_code, sessionCode)).get();
+  if (!session) return res.status(404).json({ error: "Session not found" });
+
+  db.update(schema.submissions)
+    .set({ sealed_at: Math.floor(Date.now() / 1000) })
+    .where(and(eq(schema.submissions.session_id, session.id), eq(schema.submissions.student_id, studentId))).run();
+    
+  res.json({ ok: true, receipt: `RCPT-${Date.now().toString().slice(-6)}` });
+});
+
+const PORT = 4000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Local Exam Sidecar running on http://0.0.0.0:${PORT}`);
-  startCloudSyncWorker();
+  log(`[GradeINT Sidecar] Running on http://0.0.0.0:${PORT} (LAN reachable)`);
 });
