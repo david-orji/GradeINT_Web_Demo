@@ -32,8 +32,11 @@ export function startCloudSyncWorker() {
       const envelopes: { id: number; envelope: SubmissionEnvelope }[] = [];
 
       for (const sub of subs) {
-        // Skip already synced
-        if (sub.synced_at) continue;
+        // Skip only if the submission was synced *after* being sealed —
+        // meaning the final state has already been confirmed pushed to the cloud.
+        // If synced_at was set during an earlier in_progress cycle but the student
+        // has since sealed their submission, we must re-sync to push the sealed state.
+        if (sub.synced_at && sub.sealed_at && sub.synced_at >= sub.sealed_at) continue;
 
         const session = db.select().from(schema.sessions).where(eq(schema.sessions.id, sub.session_id)).get();
         if (!session) continue;
