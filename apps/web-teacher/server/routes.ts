@@ -21,6 +21,8 @@ import { hashPassword, sanitizeUser } from "./auth";
 import Anthropic from "@anthropic-ai/sdk";
 import pLimit from "p-limit";
 import passport from "passport";
+import fs from "fs";
+import path from "path";
 
 // Lazy init — avoids crash on startup when API key is absent
 let _anthropic: Anthropic | null = null;
@@ -870,10 +872,12 @@ Return ONLY a valid JSON object in this exact format — one entry per studentId
   /** POST /api/lan/sync/submissions — Receive batch of submissions from Local Server */
   app.post("/api/lan/sync/submissions", async (req, res) => {
     try {
-      const fs = await import("fs");
-      fs.writeFileSync("C:/Users/FAHD MUSA AHMED/Documents/McVinci/GradeINT_Web_Demo/apps/web-teacher/sync-debug.txt", JSON.stringify(req.body, null, 2));
+      const logPath = path.join(process.cwd(), "logs", "sync-received.log");
+      fs.mkdirSync(path.dirname(logPath), { recursive: true });
+      const entry = `\n--- ${new Date().toISOString()} ---\n${JSON.stringify(req.body, null, 2)}\n`;
+      fs.appendFileSync(logPath, entry);
     } catch (e) {
-      console.error("Failed to write debug file", e);
+      console.error("Failed to write sync log", e);
     }
     const envelopes: SubmissionEnvelope[] = Array.isArray(req.body) ? req.body : (req.body.submissions || []);
     if (!Array.isArray(envelopes)) return res.status(400).json({ message: "Invalid payload format" });
