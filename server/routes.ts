@@ -138,6 +138,16 @@ export async function registerRoutes(
     }
   });
 
+  /** GET /api/admin/approved-teachers */
+  app.get("/api/admin/approved-teachers", requireAuth, requireRole("admin"), async (_req, res) => {
+    try {
+      const teachers = await storage.getApprovedTeachers();
+      res.json(teachers.map(sanitizeUser));
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch approved teachers" });
+    }
+  });
+
   /** PATCH /api/admin/teachers/:id/validate */
   app.patch("/api/admin/teachers/:id/validate", requireAuth, requireRole("admin"), async (req, res) => {
     try {

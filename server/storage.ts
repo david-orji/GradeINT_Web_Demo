@@ -24,6 +24,7 @@ export interface IStorage {
     status: "active" | "pending";
   }): Promise<User>;
   getPendingTeachers(): Promise<User[]>;
+  getApprovedTeachers(): Promise<User[]>;
   validateTeacher(id: number, approve: boolean): Promise<User>;
 
   // Teacher-Student Links
@@ -106,6 +107,13 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(users)
       .where(and(eq(users.role, "teacher"), eq(users.status, "pending")));
+  }
+
+  async getApprovedTeachers(): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(and(eq(users.role, "teacher"), eq(users.status, "active")));
   }
 
   async validateTeacher(id: number, approve: boolean): Promise<User> {
