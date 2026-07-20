@@ -19,6 +19,10 @@ export function useAuth() {
     queryFn: fetchMe,
     staleTime: 5 * 60 * 1000,
     retry: false,
+    // Re-verify session validity whenever the user returns to the tab after
+    // being idle. If the session expired, fetchMe returns null → ProtectedRoute
+    // redirects to /login cleanly without any "Access denied" flash.
+    refetchOnWindowFocus: true,
   });
 
   const loginMutation = useMutation({
