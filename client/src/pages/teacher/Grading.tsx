@@ -92,6 +92,24 @@ export default function GradingPage() {
     }
   });
 
+  // Single-submission grading (used in the review panel)
+  const gradeMutation = useMutation({
+    mutationFn: async (submissionId: number) => {
+      const res = await apiRequest("POST", `/api/submissions/${submissionId}/grade`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.submissions.listByExam.path, selectedExamId] });
+      toast({
+        title: "Grading started",
+        description: "MCQs scored instantly. AI is grading open-ended responses in the background.",
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: "Grading failed", description: err.message, variant: "destructive" });
+    }
+  });
+
   const userMap = useMemo(() => {
     const map = new Map();
     users?.forEach((u: any) => map.set(u.id, u.name));
