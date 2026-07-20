@@ -1,4 +1,4 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryClient, QueryFunction, QueryCache } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -41,7 +41,24 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+// Global 401 interceptor — if ANY query unexpectedly receives a 401 (i.e. the
+// server session expired while the client still thinks it's logged in), we
+// redirect to /login. The auth query (use-auth.ts) is exempt because its
+// queryFn returns null on 401 instead of throwing, so it never reaches here.
+const globalQueryCache = new QueryCache({
+  onError: (error) => {
+    const msg = error instanceof Error ? error.message : "";
+    if (msg.startsWith("401:")) {
+      // Avoid redirect loops: only redirect if not already on /login
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.replace("/login");
+      }
+    }
+  },
+});
+
 export const queryClient = new QueryClient({
+  queryCache: globalQueryCache,
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
