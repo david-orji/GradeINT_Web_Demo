@@ -53,8 +53,12 @@ app.use(
     secret: process.env.SESSION_SECRET ?? "gradeint-dev-secret-change-in-prod",
     resave: false,
     saveUninitialized: false,
+    // Reset the cookie maxAge on every response so active users never get
+    // logged out mid-session. The 7-day window only starts counting from
+    // the last request, not from login time.
+    rolling: true,
     cookie: {
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days from last activity
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
     },
