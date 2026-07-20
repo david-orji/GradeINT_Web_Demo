@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -28,7 +28,10 @@ export const teacherStudentLinks = pgTable("teacher_student_links", {
   status: text("status", { enum: ["pending", "accepted", "declined"] }).notNull().default("pending"),
   requestedAt: timestamp("requested_at").defaultNow(),
   respondedAt: timestamp("responded_at"),
-});
+}, (table) => ({
+  teacherIdx: index("links_teacher_idx").on(table.teacherId),
+  studentIdx: index("links_student_idx").on(table.studentId),
+}));
 
 export const exams = pgTable("exams", {
   id: serial("id").primaryKey(),
@@ -80,7 +83,11 @@ export const submissions = pgTable("submissions", {
   // Stores grades: { [questionId]: { score: number, feedback: string } }
   grades: jsonb("grades").$type<Record<string, { score: number, feedback: string }>>(),
   totalScore: integer("total_score"),
-});
+}, (table) => ({
+  studentIdx: index("submissions_student_idx").on(table.studentId),
+  sessionIdx: index("submissions_session_idx").on(table.sessionId),
+  examIdx: index("submissions_exam_idx").on(table.examId),
+}));
 
 // === SCHEMAS ===
 
