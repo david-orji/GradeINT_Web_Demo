@@ -29,6 +29,15 @@ function getAnthropic(): Anthropic {
   return _anthropic;
 }
 
+// ── Module-level AI rate limiter ──────────────────────────────────────────────
+// Single shared limiter across ALL concurrent student requests so we never
+// exceed Anthropic's per-account concurrent-request cap.
+// Override via AI_CONCURRENCY_LIMIT env var to match your API tier:
+//   Tier 1 → 5  |  Tier 2 → 10  |  Tier 3 → 20  |  Tier 4 → 40
+const globalGradingLimiter = pLimit(
+  Number(process.env.AI_CONCURRENCY_LIMIT) || 5
+);
+
 // ── Middleware helpers ────────────────────────────────────────────────────────
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -329,11 +338,11 @@ export async function registerRoutes(
       // ── PHASE 2: Grade open-ended questions in the background ──────────────
       if (openEndedQuestions.length === 0) return;
 
-      const limit = pLimit(2);
-
+      // Use the module-level limiter (not a new per-request one) so concurrent
+      // submissions from multiple students don't race past the API tier ceiling.
       Promise.all(
         openEndedQuestions.map((q) =>
-          limit(async () => {
+          globalGradingLimiter(async () => {
             const studentResponse = (submission.responses?.[q.id.toString()] || "").trim();
             const responseText = studentResponse.length > 0 ? studentResponse : "No response provided.";
 
@@ -457,21 +466,32 @@ Return ONLY a JSON object: { "score": number, "feedback": string }
 
       res.json({ queued: toGrade.length, message: "MCQs graded. AI grading open-ended questions in background." });
 
-      if (openQuestions.length === 0) return;
-
-      const limit = pLimit(2);
+      // ── Batch AI grading — chunked to avoid output-token overflow ──────────
+      // Each API call covers at most CHUNK_SIZE students per question, keeping
+      // the JSON response well within the 4,096-token output limit.
+      // The global limiter ensures concurrent questions across different exams
+      // don't collectively exceed the Anthropic concurrency cap.
+      const CHUNK_SIZE = 20;
 
       await Promise.all(
         openQuestions.map(q =>
-          limit(async () => {
-            const responseLines = toGrade
-              .map(sub => {
-                const resp = ((sub.responses as any)?.[q.id.toString()] || "").trim();
-                return `[${sub.studentId}]: "${resp.length > 0 ? resp : "No response provided."}"`;
-              })
-              .join("\n");
+          globalGradingLimiter(async () => {
+            // Split students into chunks of CHUNK_SIZE
+            const studentChunks: typeof toGrade[] = [];
+            for (let i = 0; i < toGrade.length; i += CHUNK_SIZE) {
+              studentChunks.push(toGrade.slice(i, i + CHUNK_SIZE));
+            }
 
-            const prompt = `
+            // Grade each chunk sequentially (within the question's limiter slot)
+            for (const studentChunk of studentChunks) {
+              const responseLines = studentChunk
+                .map(sub => {
+                  const resp = ((sub.responses as any)?.[q.id.toString()] || "").trim();
+                  return `[${sub.studentId}]: "${resp.length > 0 ? resp : "No response provided."}"`;
+                })
+                .join("\n");
+
+              const prompt = `
 You are a strict, fair examiner grading a student exam for the subject: ${exam.subject}.
 
 Question: ${q.text}
@@ -486,56 +506,57 @@ ${responseLines}
 
 Return ONLY a valid JSON object in this exact format — one entry per studentId:
 { "[studentId]": { "score": number, "feedback": string }, ... }
-            `.trim();
+              `.trim();
 
-            let results: Record<string, GradeEntry>;
-            try {
-              const aiResponse = await getAnthropic().messages.create({
-                model: "claude-sonnet-4-5",
-                max_tokens: 1024,
-                messages: [{ role: "user", content: prompt }],
-              });
-              const rawText =
-                aiResponse.content[0]?.type === "text"
-                  ? aiResponse.content[0].text
-                  : "{}";
-              results = JSON.parse(rawText);
-            } catch (aiErr) {
-              console.error(`Batch AI grading failed for question ${q.id}:`, aiErr);
-              results = Object.fromEntries(
-                toGrade.map(sub => [
-                  sub.studentId.toString(),
-                  { score: 0, feedback: "AI grading failed — please score manually." },
-                ])
+              let results: Record<string, GradeEntry>;
+              try {
+                const aiResponse = await getAnthropic().messages.create({
+                  model: "claude-sonnet-4-5",
+                  max_tokens: 1024,
+                  messages: [{ role: "user", content: prompt }],
+                });
+                const rawText =
+                  aiResponse.content[0]?.type === "text"
+                    ? aiResponse.content[0].text
+                    : "{}";
+                results = JSON.parse(rawText);
+              } catch (aiErr) {
+                console.error(`Batch AI grading failed for question ${q.id} (chunk):`, aiErr);
+                results = Object.fromEntries(
+                  studentChunk.map(sub => [
+                    sub.studentId.toString(),
+                    { score: 0, feedback: "AI grading failed — please score manually." },
+                  ])
+                );
+              }
+
+              await Promise.all(
+                studentChunk.map(async sub => {
+                  const result: GradeEntry = results[sub.studentId.toString()] ?? {
+                    score: 0,
+                    feedback: "No AI result returned — please score manually.",
+                  };
+
+                  const current = await storage.getSubmission(sub.id);
+                  if (!current) return;
+
+                  const mergedGrades: Record<string, GradeEntry> = {
+                    ...(current.grades as any),
+                    [q.id.toString()]: result,
+                  };
+
+                  const newTotal = Object.values(mergedGrades).reduce(
+                    (sum, g) => sum + ((g as any).pending ? 0 : (g.score || 0)),
+                    0
+                  );
+
+                  await storage.updateSubmission(sub.id, {
+                    grades: mergedGrades as any,
+                    totalScore: newTotal,
+                  });
+                })
               );
             }
-
-            await Promise.all(
-              toGrade.map(async sub => {
-                const result: GradeEntry = results[sub.studentId.toString()] ?? {
-                  score: 0,
-                  feedback: "No AI result returned — please score manually.",
-                };
-
-                const current = await storage.getSubmission(sub.id);
-                if (!current) return;
-
-                const mergedGrades: Record<string, GradeEntry> = {
-                  ...(current.grades as any),
-                  [q.id.toString()]: result,
-                };
-
-                const newTotal = Object.values(mergedGrades).reduce(
-                  (sum, g) => sum + ((g as any).pending ? 0 : (g.score || 0)),
-                  0
-                );
-
-                await storage.updateSubmission(sub.id, {
-                  grades: mergedGrades as any,
-                  totalScore: newTotal,
-                });
-              })
-            );
           })
         )
       ).catch(err => console.error("Batch AI grading error:", err));
