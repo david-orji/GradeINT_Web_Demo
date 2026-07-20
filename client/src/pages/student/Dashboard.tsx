@@ -63,6 +63,34 @@ export default function StudentDashboard() {
     return map;
   }, [gradedExamIds, questionResults]);
 
+  // Collect all unique exam IDs referenced by any submission (submitted or graded).
+  // We must fetch these individually because GET /api/exams for students only
+  // returns *published* exams — closed exams are excluded — so titles would
+  // otherwise fall back to "Exam #N".
+  const allSubmissionExamIds = useMemo(() => {
+    return Array.from(new Set((submissions ?? []).map(s => s.examId as number)));
+  }, [submissions]);
+
+  const examDetailResults = useQueries({
+    queries: allSubmissionExamIds.map(examId => ({
+      queryKey: ["/api/exams", examId],
+      queryFn: async () => {
+        const res = await fetch(`/api/exams/${examId}`, { credentials: "include" });
+        if (!res.ok) return null;
+        return res.json();
+      },
+      staleTime: 5 * 60 * 1000, // closed exam metadata never changes
+    })),
+  });
+
+  // Combined title map: published exams (from list) + closed exams (fetched individually)
+  const examTitleMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    (exams ?? []).forEach(e => { if (e.id && e.title) map[e.id] = e.title; });
+    examDetailResults.forEach(q => { if (q.data?.id && q.data?.title) map[q.data.id] = q.data.title; });
+    return map;
+  }, [exams, examDetailResults]);
+
   const handleJoin = () => {
     const session = sessions?.find(s => s.accessCode === accessCode && s.status === "active");
     if (!session) {
@@ -87,7 +115,7 @@ export default function StudentDashboard() {
   };
 
   const getExamTitle = (examId: number) => {
-    return exams?.find(e => e.id === examId)?.title || `Exam #${examId}`;
+    return examTitleMap[examId] || `Exam #${examId}`;
   };
 
   return (
